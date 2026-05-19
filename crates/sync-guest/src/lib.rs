@@ -14,23 +14,19 @@ pub const SSBUSYNC_SET_PACER_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_pacer_enable
 pub const SSBUSYNC_SET_TRIPLE_BUFFER_ENABLED_SYMBOL: &[u8] =
     b"ssbusync_set_triple_buffer_enabled\0";
 pub const SSBUSYNC_SET_BUFFER_MODE_SYMBOL: &[u8] = b"ssbusync_set_buffer_mode\0";
-pub const SSBUSYNC_SET_FRAME_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_set_frame_index_mode\0";
-pub const SSBUSYNC_SET_INDEX_BACKEND_SYMBOL: &[u8] = b"ssbusync_set_index_backend\0";
+pub const SSBUSYNC_SET_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_set_index_mode\0";
 pub const SSBUSYNC_SET_OVERCLOCK_PROFILE_SYMBOL: &[u8] = b"ssbusync_set_overclock_profile\0";
 pub const SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL: &[u8] =
     b"ssbusync_current_overclock_profile\0";
 pub const SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_SYMBOL: &[u8] =
     b"ssbusync_overclock_uses_safe_profiles\0";
 pub const SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL: &[u8] = b"ssbusync_get_nstuff_status\0";
-pub const SSBUSYNC_REFRESH_INDEX_SYMBOL: &[u8] = b"ssbusync_refresh_index\0";
-pub const SSBUSYNC_CURRENT_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_current_index_mode\0";
-pub const SSBUSYNC_CURRENT_INDEX_BACKEND_SYMBOL: &[u8] = b"ssbusync_current_index_backend\0";
 pub const SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_vsync_changed_callback\0";
 pub const SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_buffer_mode_changed_callback\0";
-pub const SSBUSYNC_SET_INDEX_BACKEND_CHANGED_CALLBACK_SYMBOL: &[u8] =
-    b"ssbusync_set_index_backend_changed_callback\0";
+pub const SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
+    b"ssbusync_set_index_mode_changed_callback\0";
 
 /// Raw callback signature used by the remote ssbusync event registration API.
 pub type StateCallback = extern "C" fn(u32);
@@ -40,16 +36,16 @@ pub type StateCallback = extern "C" fn(u32);
 pub struct EnvironmentFlags(u32);
 
 impl EnvironmentFlags {
-    pub const ALLOW_BUFFER_SWAP: u32 = 1 << 0;
-    pub const EMULATOR_KNOWN: u32 = 1 << 1;
-    pub const EMULATOR_VALUE: u32 = 1 << 2;
-    pub const SWAPPING_BUFFER: u32 = 1 << 3;
-    pub const TRIPLE_ENABLED: u32 = 1 << 4;
-    pub const VSYNC_DISABLED: u32 = 1 << 7;
-    pub const PACER_DISABLED: u32 = 1 << 8;
-    pub const PROFILING_ENABLED: u32 = 1 << 9;
-    pub const SLOW_PACER_BIAS: u32 = 1 << 10;
-    pub const OVERCLOCKER: u32 = 1 << 11;
+    pub const SWAPPING_BUFFER: u32 = 1 << 0;
+    pub const SWAPPING_INDEX: u32 = 1 << 1;
+    pub const TRIPLE_ENABLED: u32 = 1 << 2;
+    pub const INDEX_MODE: u32 = 0b11 << 3;
+    pub const VSYNC_ENABLED: u32 = 1 << 5;
+    pub const RENDER_OPTS_ENABLED: u32 = 1 << 6;
+    pub const PACER_ENABLED: u32 = 1 << 7;
+    pub const PROFILING_ENABLED: u32 = 1 << 8;
+    pub const SLOW_PACER_BIAS: u32 = 1 << 9;
+    pub const OVERCLOCKER: u32 = 1 << 10;
 
     #[inline]
     pub const fn new(bits: u32) -> Self {
@@ -78,7 +74,7 @@ impl EnvironmentFlags {
     ///
     /// let flags = EnvironmentFlags::new(EnvironmentFlags::TRIPLE_ENABLED);
     /// assert!(flags.contains(EnvironmentFlags::TRIPLE_ENABLED));
-    /// assert!(!flags.contains(EnvironmentFlags::VSYNC_DISABLED));
+    /// assert!(flags.contains(EnvironmentFlags::VSYNC_ENABLED));
     /// ```
     #[inline]
     pub const fn contains(self, mask: u32) -> bool {
@@ -93,7 +89,7 @@ impl EnvironmentFlags {
     ///
     /// let flags = EnvironmentFlags::default()
     ///     .with(EnvironmentFlags::TRIPLE_ENABLED, true)
-    ///     .with(EnvironmentFlags::VSYNC_DISABLED, false);
+    ///     .with(EnvironmentFlags::VSYNC_ENABLED, true);
     ///
     /// assert!(flags.contains(EnvironmentFlags::TRIPLE_ENABLED));
     /// ```
@@ -138,60 +134,28 @@ impl BufferMode {
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Remote frame-index policy.
-pub enum FrameIndexMode {
+pub enum IndexMode {
     Immediate = 0,
-    Double = 1,
-    Triple = 2,
-    Vanilla = 3,
-    Frozen = 4,
+    OneBehind = 1,
+    TwoBehind = 2,
 }
 
-impl FrameIndexMode {
+impl IndexMode {
     /// Return Frame Buffer Index from int
     ///
     /// # Example
     /// ```rust
     /// use ultelier::sync_guest::FrameIndexMode;
     ///
-    /// assert_eq!(FrameIndexMode::from_u32(1), Some(FrameIndexMode::Double));
-    /// assert_eq!(FrameIndexMode::from_u32(4), Some(FrameIndexMode::Frozen));
-    /// assert_eq!(FrameIndexMode::from_u32(99), None);
+    /// assert_eq!(IndexMode::from_u32(1), Some(IndexMode::OneBehind));
+    /// assert_eq!(IndexMode::from_u32(0), Some(IndexMode::Immediate));
+    /// assert_eq!(IndexMode::from_u32(99), None);
     /// ```
     pub fn from_u32(value: u32) -> Option<Self> {
         match value {
             0 => Some(Self::Immediate),
-            1 => Some(Self::Double),
-            2 => Some(Self::Triple),
-            3 => Some(Self::Vanilla),
-            4 => Some(Self::Frozen),
-            _ => None,
-        }
-    }
-}
-
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Backend used to choose the active frame index.
-pub enum IndexBackend {
-    Dynamic = 0,
-    Static = 1,
-}
-
-impl IndexBackend {
-    /// Return Index Backend from int
-    ///
-    /// # Example
-    /// ```rust
-    /// use ultelier::sync_guest::IndexBackend;
-    ///
-    /// assert_eq!(IndexBackend::from_u32(0), Some(IndexBackend::Dynamic));
-    /// assert_eq!(IndexBackend::from_u32(1), Some(IndexBackend::Static));
-    /// assert_eq!(IndexBackend::from_u32(7), None);
-    /// ```
-    pub fn from_u32(value: u32) -> Option<Self> {
-        match value {
-            0 => Some(Self::Dynamic),
-            1 => Some(Self::Static),
+            1 => Some(Self::OneBehind),
+            2 => Some(Self::TwoBehind),
             _ => None,
         }
     }
@@ -230,7 +194,7 @@ pub struct NsTuffStatus {
 impl OverclockProfile {
     /// Return `OverclockProfile` from int.
     ///
-    /// `0` is treated as `PerformanceSingles` 
+    /// `0` is treated as `PerformanceSingles`
     ///
     /// # Example
     /// ```rust
@@ -477,23 +441,8 @@ pub fn set_buffer_mode(mode: BufferMode) -> Option<bool> {
 /// As with `set_buffer_mode(...)`, cache the last applied value locally and
 /// only forward changes across the symbol boundary.
 #[doc(hidden)]
-pub fn set_frame_index_mode(mode: FrameIndexMode) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_FRAME_INDEX_MODE_SYMBOL, mode as u32).map(|value| value != 0)
-}
-
-/// Selects whether ssbusync uses its dynamic runtime or static.
-///
-/// You can not switch between double or triple buffer without dynamic runtime
-/// enabled.
-///
-/// # Example
-/// ```ignore
-/// use ultelier::sync_guest::IndexBackend;
-///
-/// let applied = ultelier::sync_guest::set_index_backend(IndexBackend::Dynamic);
-/// ```
-pub fn set_index_backend(mode: IndexBackend) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_INDEX_BACKEND_SYMBOL, mode as u32).map(|value| value != 0)
+pub fn set_index_mode(mode: IndexMode) -> Option<bool> {
+    call_u32_u32(SSBUSYNC_SET_INDEX_MODE_SYMBOL, mode as u32).map(|value| value != 0)
 }
 
 /// Requests a specific remote overclock profile.
@@ -556,46 +505,6 @@ pub fn current_nstuff_status() -> Option<NsTuffStatus> {
     call_fill_struct(SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL)
 }
 
-/// Recomputes the runtime frame-index mode from the current environment flags.
-///
-/// Most callers do not need this after `set_buffer_mode(...)` or
-/// `set_index_backend(...)`, because ssbusync already refreshes its runtime
-/// index selection internally when those settings change.
-///
-/// # Example
-/// ```ignore
-/// if !ultelier::sync_guest::refresh_index() {
-///     skyline::println!("could not refresh frame index state");
-/// }
-/// ```
-pub fn refresh_index() -> bool {
-    call_void(SSBUSYNC_REFRESH_INDEX_SYMBOL).is_some()
-}
-
-/// Reads the currently active frame-index mode.
-///
-/// # Example
-/// ```ignore
-/// if let Some(mode) = ultelier::sync_guest::current_index_mode() {
-///     skyline::println!("index mode: {:?}", mode);
-/// }
-/// ```
-pub fn current_index_mode() -> Option<FrameIndexMode> {
-    call_u32(SSBUSYNC_CURRENT_INDEX_MODE_SYMBOL).and_then(FrameIndexMode::from_u32)
-}
-
-/// Reads the currently active index backend.
-///
-/// # Example
-/// ```ignore
-/// if let Some(backend) = ultelier::sync_guest::current_index_backend() {
-///     skyline::println!("index backend: {:?}", backend);
-/// }
-/// ```
-pub fn current_index_backend() -> Option<IndexBackend> {
-    call_u32(SSBUSYNC_CURRENT_INDEX_BACKEND_SYMBOL).and_then(IndexBackend::from_u32)
-}
-
 /// Registers a raw `u32` callback for remote vsync-change notifications.
 ///
 /// Pass `None` to unregister the callback.
@@ -649,31 +558,30 @@ pub fn set_buffer_mode_changed_callback(callback: Option<StateCallback>) -> Opti
 pub fn clear_buffer_mode_changed_callback() -> Option<bool> {
     set_buffer_mode_changed_callback(None)
 }
-
-/// Registers a raw `u32` callback for remote index-backend changes.
+/// Registers a raw `u32` callback for remote index-mode changes.
 ///
 /// Pass `None` to unregister the callback.
 ///
 /// # Example
 /// ```ignore
-/// extern "C" fn on_index_backend_changed(raw: u32) {
-///     skyline::println!("index backend changed to raw value {raw}");
+/// extern "C" fn on_index_mode_changed(raw: u32) {
+///     skyline::println!("index mode changed to raw value {raw}");
 /// }
 ///
 /// let registered =
-///     ultelier::sync_guest::set_index_backend_changed_callback(Some(on_index_backend_changed));
+///     ultelier::sync_guest::set_index_mode_changed_callback(Some(on_index_mode_changed));
 /// ```
-pub fn set_index_backend_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
-    call_callback_reg(SSBUSYNC_SET_INDEX_BACKEND_CHANGED_CALLBACK_SYMBOL, callback)
+pub fn set_index_mode_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
+    call_callback_reg(SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL, callback)
         .map(|value| value != 0)
 }
 
-/// Clears the raw index-backend callback.
+/// Clears the raw index-mode callback.
 ///
 /// # Example
 /// ```ignore
-/// let cleared = ultelier::sync_guest::clear_index_backend_changed_callback();
+/// let cleared = ultelier::sync_guest::clear_index_mode_changed_callback();
 /// ```
-pub fn clear_index_backend_changed_callback() -> Option<bool> {
-    set_index_backend_changed_callback(None)
+pub fn clear_index_mode_changed_callback() -> Option<bool> {
+    set_index_mode_changed_callback(None)
 }

@@ -1,15 +1,15 @@
 use crate::callback::Callback;
-use crate::{BufferMode, IndexBackend, StateCallback};
+use crate::{BufferMode, IndexMode, StateCallback};
 use std::sync::Mutex;
 
 pub type TypedVsyncCallback = extern "C" fn(bool);
 pub type TypedBufferModeCallback = extern "C" fn(BufferMode);
-pub type TypedIndexBackendCallback = extern "C" fn(IndexBackend);
+pub type TypedIndexModeCallback = extern "C" fn(IndexMode);
 
 static TYPED_VSYNC_CHANGED: Mutex<Callback<TypedVsyncCallback>> = Mutex::new(Callback::new(None));
 static TYPED_BUFFER_MODE_CHANGED: Mutex<Callback<TypedBufferModeCallback>> =
     Mutex::new(Callback::new(None));
-static TYPED_INDEX_BACKEND_CHANGED: Mutex<Callback<TypedIndexBackendCallback>> =
+static TYPED_INDEX_MODE_CHANGED: Mutex<Callback<TypedIndexModeCallback>> =
     Mutex::new(Callback::new(None));
 
 fn with_typed_callback<F, R>(
@@ -36,11 +36,11 @@ extern "C" fn buffer_mode_changed_typed_thunk(raw: u32) {
     });
 }
 
-extern "C" fn index_backend_changed_typed_thunk(raw: u32) {
-    let Some(mode) = IndexBackend::from_u32(raw) else {
+extern "C" fn index_mode_changed_typed_thunk(raw: u32) {
+    let Some(mode) = IndexMode::from_u32(raw) else {
         return;
     };
-    with_typed_callback(&TYPED_INDEX_BACKEND_CHANGED, |callback| {
+    with_typed_callback(&TYPED_INDEX_MODE_CHANGED, |callback| {
         let _ = callback.invoke((mode,));
     });
 }
@@ -50,14 +50,14 @@ extern "C" fn index_backend_changed_typed_thunk(raw: u32) {
 pub enum SideEffectEvent {
     VsyncChanged = 0,
     BufferModeChanged = 1,
-    IndexBackendChanged = 2,
+    IndexModeChanged = 2,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SideEffectRegistry {
     pub vsync_changed: Callback<StateCallback>,
     pub buffer_mode_changed: Callback<StateCallback>,
-    pub index_backend_changed: Callback<StateCallback>,
+    pub index_mode_changed: Callback<StateCallback>,
 }
 
 impl SideEffectRegistry {
@@ -86,9 +86,9 @@ impl SideEffectRegistry {
             ok &= crate::set_buffer_mode_changed_callback(self.buffer_mode_changed.get())
                 == Some(true);
         }
-        if self.index_backend_changed.is_set() {
-            ok &= crate::set_index_backend_changed_callback(self.index_backend_changed.get())
-                == Some(true);
+        if self.index_mode_changed.is_set() {
+            ok &=
+                crate::set_index_mode_changed_callback(self.index_mode_changed.get()) == Some(true);
         }
         ok
     }
@@ -102,7 +102,7 @@ impl SideEffectRegistry {
     pub fn clear_remote() -> bool {
         crate::clear_vsync_changed_callback() == Some(true)
             && crate::clear_buffer_mode_changed_callback() == Some(true)
-            && crate::clear_index_backend_changed_callback() == Some(true)
+            && crate::clear_index_mode_changed_callback() == Some(true)
     }
 }
 
@@ -156,29 +156,29 @@ pub fn clear_buffer_mode_changed() -> bool {
     crate::clear_buffer_mode_changed_callback() == Some(true)
 }
 
-/// Registers a raw index-backend callback and returns whether registration
+/// Registers a raw index-mode callback and returns whether registration
 /// succeeded.
 ///
 /// # Example
 /// ```ignore
-/// extern "C" fn on_index_backend_changed(raw: u32) {
-///     skyline::println!("index backend raw = {raw}");
+/// extern "C" fn on_index_mode_changed(raw: u32) {
+///     skyline::println!("index mode raw = {raw}");
 /// }
 ///
-/// let ok = ultelier::sync_guest::events::set_index_backend_changed(on_index_backend_changed);
+/// let ok = ultelier::sync_guest::events::set_index_mode_changed(on_index_mode_changed);
 /// ```
-pub fn set_index_backend_changed(callback: StateCallback) -> bool {
-    crate::set_index_backend_changed_callback(Some(callback)) == Some(true)
+pub fn set_index_mode_changed(callback: StateCallback) -> bool {
+    crate::set_index_mode_changed_callback(Some(callback)) == Some(true)
 }
 
-/// Clears the raw index-backend callback.
+/// Clears the raw index-mode callback.
 ///
 /// # Example
 /// ```ignore
-/// let ok = ultelier::sync_guest::events::clear_index_backend_changed();
+/// let ok = ultelier::sync_guest::events::clear_index_mode_changed();
 /// ```
-pub fn clear_index_backend_changed() -> bool {
-    crate::clear_index_backend_changed_callback() == Some(true)
+pub fn clear_index_mode_changed() -> bool {
+    crate::clear_index_mode_changed_callback() == Some(true)
 }
 
 /// Registers a typed `bool` callback for vsync changes.
@@ -243,34 +243,34 @@ pub fn clear_typed_buffer_mode_changed() -> bool {
     crate::clear_buffer_mode_changed_callback() == Some(true)
 }
 
-/// Registers a typed `IndexBackend` callback for index-backend changes.
+/// Registers a typed `IndexMode` callback for index-mode changes.
 ///
 /// # Example
 /// ```ignore
-/// use ultelier::sync_guest::IndexBackend;
+/// use ultelier::sync_guest::IndexMode;
 ///
-/// extern "C" fn on_index_backend_changed(mode: IndexBackend) {
-///     skyline::println!("index backend = {:?}", mode);
+/// extern "C" fn on_index_mode_changed(mode: IndexMode) {
+///     skyline::println!("index mode = {:?}", mode);
 /// }
 ///
-/// let ok = ultelier::sync_guest::events::set_typed_index_backend_changed(on_index_backend_changed);
+/// let ok = ultelier::sync_guest::events::set_typed_index_mode_changed(on_index_mode_changed);
 /// ```
-pub fn set_typed_index_backend_changed(callback: TypedIndexBackendCallback) -> bool {
-    with_typed_callback(&TYPED_INDEX_BACKEND_CHANGED, |slot| {
+pub fn set_typed_index_mode_changed(callback: TypedIndexModeCallback) -> bool {
+    with_typed_callback(&TYPED_INDEX_MODE_CHANGED, |slot| {
         let _ = slot.set(callback);
     });
-    crate::set_index_backend_changed_callback(Some(index_backend_changed_typed_thunk)) == Some(true)
+    crate::set_index_mode_changed_callback(Some(index_mode_changed_typed_thunk)) == Some(true)
 }
 
-/// Clears the typed index-backend callback.
+/// Clears the typed index-mode callback.
 ///
 /// # Example
 /// ```ignore
-/// let ok = ultelier::sync_guest::events::clear_typed_index_backend_changed();
+/// let ok = ultelier::sync_guest::events::clear_typed_index_mode_changed();
 /// ```
-pub fn clear_typed_index_backend_changed() -> bool {
-    with_typed_callback(&TYPED_INDEX_BACKEND_CHANGED, |slot| {
+pub fn clear_typed_index_mode_changed() -> bool {
+    with_typed_callback(&TYPED_INDEX_MODE_CHANGED, |slot| {
         let _ = slot.clear();
     });
-    crate::clear_index_backend_changed_callback() == Some(true)
+    crate::clear_index_mode_changed_callback() == Some(true)
 }
