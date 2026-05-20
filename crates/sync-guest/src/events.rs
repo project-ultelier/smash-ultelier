@@ -3,10 +3,13 @@ use crate::{BufferMode, IndexMode, StateCallback};
 use std::sync::Mutex;
 
 pub type TypedVsyncCallback = extern "C" fn(bool);
+pub type TypedRenderOptsCallback = extern "C" fn(bool);
 pub type TypedBufferModeCallback = extern "C" fn(BufferMode);
 pub type TypedIndexModeCallback = extern "C" fn(IndexMode);
 
 static TYPED_VSYNC_CHANGED: Mutex<Callback<TypedVsyncCallback>> = Mutex::new(Callback::new(None));
+static TYPED_RENDER_OPTS_CHANGED: Mutex<Callback<TypedRenderOptsCallback>> =
+    Mutex::new(Callback::new(None));
 static TYPED_BUFFER_MODE_CHANGED: Mutex<Callback<TypedBufferModeCallback>> =
     Mutex::new(Callback::new(None));
 static TYPED_INDEX_MODE_CHANGED: Mutex<Callback<TypedIndexModeCallback>> =
@@ -23,6 +26,13 @@ fn with_typed_callback<F, R>(
 extern "C" fn vsync_changed_typed_thunk(enabled: u32) {
     let enabled = enabled != 0;
     with_typed_callback(&TYPED_VSYNC_CHANGED, |callback| {
+        let _ = callback.invoke((enabled,));
+    });
+}
+
+extern "C" fn render_opts_changed_typed_thunk(enabled: u32) {
+    let enabled = enabled != 0;
+    with_typed_callback(&TYPED_RENDER_OPTS_CHANGED, |callback| {
         let _ = callback.invoke((enabled,));
     });
 }
@@ -49,13 +59,15 @@ extern "C" fn index_mode_changed_typed_thunk(raw: u32) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SideEffectEvent {
     VsyncChanged = 0,
-    BufferModeChanged = 1,
-    IndexModeChanged = 2,
+    RenderOptsChanged = 1,
+    BufferModeChanged = 2,
+    IndexModeChanged = 3,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SideEffectRegistry {
     pub vsync_changed: Callback<StateCallback>,
+    pub render_opts_changed: Callback<StateCallback>,
     pub buffer_mode_changed: Callback<StateCallback>,
     pub index_mode_changed: Callback<StateCallback>,
 }
@@ -82,6 +94,10 @@ impl SideEffectRegistry {
         if self.vsync_changed.is_set() {
             ok &= crate::set_vsync_changed_callback(self.vsync_changed.get()) == Some(true);
         }
+        if self.render_opts_changed.is_set() {
+            ok &= crate::set_render_opts_changed_callback(self.render_opts_changed.get())
+                == Some(true);
+        }
         if self.buffer_mode_changed.is_set() {
             ok &= crate::set_buffer_mode_changed_callback(self.buffer_mode_changed.get())
                 == Some(true);
@@ -101,6 +117,7 @@ impl SideEffectRegistry {
     /// ```
     pub fn clear_remote() -> bool {
         crate::clear_vsync_changed_callback() == Some(true)
+            && crate::clear_render_opts_changed_callback() == Some(true)
             && crate::clear_buffer_mode_changed_callback() == Some(true)
             && crate::clear_index_mode_changed_callback() == Some(true)
     }
@@ -131,6 +148,30 @@ pub fn clear_vsync_changed() -> bool {
     crate::clear_vsync_changed_callback() == Some(true)
 }
 
+/// Registers a raw render-opts change callback and returns whether registration
+/// succeeded.
+///
+/// # Example
+/// ```ignore
+/// extern "C" fn on_render_opts_changed(raw: u32) {
+///     skyline::println!("render-opts enabled = {}", raw != 0);
+/// }
+///
+/// let ok = ultelier::sync_guest::events::set_render_opts_changed(on_render_opts_changed);
+/// ```
+pub fn set_render_opts_changed(callback: StateCallback) -> bool {
+    crate::set_render_opts_changed_callback(Some(callback)) == Some(true)
+}
+
+/// Clears the raw render-opts change callback.
+///
+/// # Example
+/// ```ignore
+/// let ok = ultelier::sync_guest::events::clear_render_opts_changed();
+/// ```
+pub fn clear_render_opts_changed() -> bool {
+    crate::clear_render_opts_changed_callback() == Some(true)
+}
 /// Registers a raw buffer-mode callback and returns whether registration
 /// succeeded.
 ///
@@ -209,6 +250,36 @@ pub fn clear_typed_vsync_changed() -> bool {
         let _ = slot.clear();
     });
     crate::clear_vsync_changed_callback() == Some(true)
+}
+
+/// Registers a typed `bool` callback for render opts changes.
+///
+/// # Example
+/// ```ignore
+/// extern "C" fn on_render_opts_changed(enabled: bool) {
+///     skyline::println!("render-opts enabled = {enabled}");
+/// }
+///
+/// let ok = ultelier::sync_guest::events::set_typed_render_opts_changed(on_render_opts_changed);
+/// ```
+pub fn set_typed_render_opts_changed(callback: TypedRenderOptsCallback) -> bool {
+    with_typed_callback(&TYPED_RENDER_OPTS_CHANGED, |slot| {
+        let _ = slot.set(callback);
+    });
+    crate::set_render_opts_changed_callback(Some(render_opts_changed_typed_thunk)) == Some(true)
+}
+
+/// Clears the typed render opts callback.
+///
+/// # Example
+/// ```ignore
+/// let ok = ultelier::sync_guest::events::clear_typed_render_opts_changed();
+/// ```
+pub fn clear_typed_render_opts_changed() -> bool {
+    with_typed_callback(&TYPED_RENDER_OPTS_CHANGED, |slot| {
+        let _ = slot.clear();
+    });
+    crate::clear_render_opts_changed_callback() == Some(true)
 }
 
 /// Registers a typed `BufferMode` callback for buffer-mode changes.

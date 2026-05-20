@@ -23,6 +23,8 @@ pub const SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_SYMBOL: &[u8] =
 pub const SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL: &[u8] = b"ssbusync_get_nstuff_status\0";
 pub const SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_vsync_changed_callback\0";
+pub const SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_SYMBOL: &[u8] =
+    b"ssbusync_set_render_opts_changed_callback\0";
 pub const SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_buffer_mode_changed_callback\0";
 pub const SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
@@ -529,6 +531,33 @@ pub fn set_vsync_changed_callback(callback: Option<StateCallback>) -> Option<boo
 /// ```
 pub fn clear_vsync_changed_callback() -> Option<bool> {
     set_vsync_changed_callback(None)
+}
+
+/// Registers a raw `u32` callback for remote render optimization change notifications.
+///
+/// Pass `None` to unregister the callback.
+///
+/// # Example
+/// ```ignore
+/// extern "C" fn on_render_opts_changed(raw: u32) {
+///     skyline::println!("render opts enabled = {}", raw != 0);
+/// }
+///
+/// let registered = ultelier::sync_guest::set_render_opts_callback(Some(on_render_opts_changed));
+/// ```
+pub fn set_render_opts_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
+    call_callback_reg(SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_SYMBOL, callback)
+        .map(|value| value != 0)
+}
+
+/// Clears the raw render optimization change callback.
+///
+/// # Example
+/// ```ignore
+/// let cleared = ultelier::sync_guest::clear_render_opts_changed_callback();
+/// ```
+pub fn clear_render_opts_changed_callback() -> Option<bool> {
+    set_render_opts_changed_callback(None)
 }
 
 /// Registers a raw `u32` callback for remote buffer-mode changes.
