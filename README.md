@@ -13,55 +13,58 @@ Import `ultelier` as a library:
 
 ```toml
 [dependencies]
-ultelier = { git = "https://github.com/BlankMauser/smash-ultelier.git", branch = "clean", default-features = false, features = ["sync-guest"] }
+ultelier = { git = "https://github.com/BlankMauser/smash-ultelier.git", default-features = false, features = ["sync-guest"] }
+```
+Then make sure to install it in your main function.
+
+```rust
+#[skyline::main(name = "my-plugin")]
+pub fn main() {
+    let mut config = SsbuSyncConfig::vanilla();
+    config.overclocker = true;
+    ultelier::sync_guest::install(config);
+}
 ```
 
 Then use the re-exported guest API:
 
 ```rust
-use ultelier::sync_guest::{self as sync, BufferMode, IndexBackend};
+use ultelier::sync_guest::{self as sync, BufferMode, IndexMode};
 
-pub fn enable_dynamic_triple_buffer() {
-    let _ = sync::set_index_backend(IndexBackend::Dynamic);
-    let _ = sync::set_buffer_mode(BufferMode::Triple);
+pub fn enable_less_lag() {
+    let _ = sync::set_buffer_mode(BufferMode::Double);
+    let _ = sync::set_index_mode(IndexMode::OneBehind);
 }
 ```
 
-## Runtime double/triple switching
+## Runtime buffer and index switching
 
 This is the main reason to use the library.
 
-Use `set_buffer_mode(...)` to switch between 3 delay and 4 delay (better performance).
-Currently going back to default delay is buggy and not supported. It is unlikely I make
-a fix for that personally.
-
-Recommended startup from a guest plugin:
-
-```rust
-use ultelier::sync_guest::{self as sync, BufferMode, IndexBackend};
-
-pub fn initialize_sync_control() {
-    let _ = sync::set_index_backend(IndexBackend::Dynamic);
-    let _ = sync::set_buffer_mode(BufferMode::Triple);
-}
-```
-
-IndexBackend has to be Dynamic and triple buffer must start on. Otherwise you will not
-have the memory allocated to switch between triple/double buffers.
+Use `set_buffer_mode(...)` to switch between double buffer (less delay) and triple buffer (better performance). Vanilla is triple buffered.
+Use `set_index_mode(...)` to switch between frame index modes. Vanilla is 2 frames behind. Set to 1 frame behind for less delay. Immediate mode (0 frames behind) is performance intensive and only emulators can run it, but you can shave off another frame of delay.
+Use `set_vsync_enabled(...)` to toggle vsync. (disabled = less delay)
+Use `set_render_opts_enabled(...)` to optimize smashed render and input polling loop (enabled = less delay). It is recommended to always enable this when changing buffer/index mode to something other than vanilla.
 
 Basic toggle example:
 
 ```rust
-use ultelier::sync_guest::{self as sync, BufferMode};
+use ultelier::sync_guest::{self as sync, BufferMode, IndexMode};
 
 pub fn set_low_latency_mode(enabled: bool) {
-    let target = if enabled {
-        BufferMode::Double
-    } else {
-        BufferMode::Triple
+    let buffer_target = match enabled {
+        true => BufferMode::Double,
+        false => BufferMode::Triple,
+    };
+    let index_target = match enabled {
+        true => IndexMode::OneBehind, // use IndexMode::Immediate on emulators
+        false => BufferMode::TwoBehind,
     };
 
-    let _ = sync::set_buffer_mode(target);
+    let _ = sync::set_vsync_enabled(!enabled);
+    let _ = sync::set_render_opts_enabled(enabled);
+    let _ = sync::set_buffer_mode(buffer_target);
+    let _ = sync::set_index_mode(index_target);
 }
 ```
 
@@ -106,4 +109,5 @@ To unsubscribe:
 let _ = ultelier::sync_guest::events::clear_typed_buffer_mode_changed();
 let _ = ultelier::sync_guest::events::clear_typed_index_backend_changed();
 let _ = ultelier::sync_guest::events::clear_typed_vsync_changed();
+let _ = ultelier::sync_guest::events::clear_typed_render_opts_changed();
 ```
