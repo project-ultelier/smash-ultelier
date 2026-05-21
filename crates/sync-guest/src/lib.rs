@@ -127,6 +127,36 @@ pub struct SsbuSyncConfig {
     pub overclocker: bool,
 }
 
+impl SsbuSyncConfig {
+    pub fn vanilla() -> Self {
+        Self {
+            enable_vsync: true,
+            enable_render_opts: false,
+            enabled_pacer: true,
+            slow_pacer_bias: false,
+            enable_triple_buffer: true,
+            index_mode: IndexMode::TwoBehind,
+            profiling: false,
+            overclocker: false,
+        }
+    }
+}
+
+impl Default for SsbuSyncConfig {
+    fn default() -> Self {
+        Self {
+            enable_vsync: false,
+            enable_render_opts: true,
+            enabled_pacer: true,
+            slow_pacer_bias: false,
+            enable_triple_buffer: true,
+            index_mode: IndexMode::OneBehind,
+            profiling: false,
+            overclocker: true,
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Remote buffer-ring mode.
