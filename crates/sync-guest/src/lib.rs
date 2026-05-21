@@ -56,6 +56,13 @@ pub const SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_buffer_mode_changed_callback\0";
 pub const SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_index_mode_changed_callback\0";
+pub const SSBUSYNC_GET_INSTANT_FPS_SYMBOL: &[u8] = b"ssbusync_get_instant_fps\0";
+pub const SSBUSYNC_GET_SMOOTH_FPS_SYMBOL: &[u8] = b"ssbusync_get_smooth_fps\0";
+pub const SSBUSYNC_GET_INSTANT_FRAMETIME_MS_SYMBOL: &[u8] = b"ssbusync_get_instant_frametime_ms\0";
+pub const SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL: &[u8] = b"ssbusync_get_smooth_frametime_ms\0";
+pub const SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL: &[u8] =
+    b"ssbusync_get_frametime_history_capacity\0";
+pub const SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL: &[u8] = b"ssbusync_copy_frametime_history\0";
 
 /// Raw callback signature used by the remote ssbusync event registration API.
 pub type StateCallback = extern "C" fn(u32);
@@ -333,6 +340,24 @@ fn call_u32(symbol: &'static [u8]) -> Option<u32> {
     Some(func())
 }
 
+fn call_u64(symbol: &'static [u8]) -> Option<u64> {
+    let addr = lookup_symbol_addr(symbol)?;
+    let func: extern "C" fn() -> u64 = unsafe { core::mem::transmute(addr) };
+    Some(func())
+}
+
+fn call_f64(symbol: &'static [u8]) -> Option<f64> {
+    let addr = lookup_symbol_addr(symbol)?;
+    let func: extern "C" fn() -> f64 = unsafe { core::mem::transmute(addr) };
+    Some(func())
+}
+
+fn call_usize(symbol: &'static [u8]) -> Option<usize> {
+    let addr = lookup_symbol_addr(symbol)?;
+    let func: extern "C" fn() -> usize = unsafe { core::mem::transmute(addr) };
+    Some(func())
+}
+
 fn call_u32_u32(symbol: &'static [u8], value: u32) -> Option<u32> {
     let addr = lookup_symbol_addr(symbol)?;
     let func: extern "C" fn(u32) -> u32 = unsafe { core::mem::transmute(addr) };
@@ -374,6 +399,12 @@ fn call_fill_struct<T: Default>(symbol: &'static [u8]) -> Option<T> {
     } else {
         None
     }
+}
+
+fn call_copy_f32_slice(symbol: &'static [u8], out: &mut [f32]) -> Option<usize> {
+    let addr = lookup_symbol_addr(symbol)?;
+    let func: extern "C" fn(*mut f32, usize) -> usize = unsafe { core::mem::transmute(addr) };
+    Some(func(out.as_mut_ptr(), out.len()))
 }
 
 /// Returns `true` when the remote ssbusync symbol table is available.
@@ -426,8 +457,11 @@ pub fn dynamic_resolution_enabled() -> Option<bool> {
 
 /// Sets the default game resolution level used by the remote runtime.
 pub fn set_default_game_resolution_level(level: ResolutionLevel) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL, level as u32)
-        .map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL,
+        level as u32,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads the default game resolution level in the remote runtime.
@@ -463,6 +497,39 @@ pub fn pop_dynamic_res_report(level: ResolutionLevel) -> Option<bool> {
 /// Clears all dynamic-resolution reports from the remote runtime.
 pub fn clear_all_dynamic_res_report() -> Option<bool> {
     call_u32(SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_SYMBOL).map(|value| value != 0)
+}
+
+/// Reads the instantaneous FPS estimate reported by the remote runtime.
+pub fn instant_fps() -> Option<u64> {
+    call_u64(SSBUSYNC_GET_INSTANT_FPS_SYMBOL)
+}
+
+/// Reads the smoothed FPS estimate reported by the remote runtime.
+pub fn smooth_fps() -> Option<u64> {
+    call_u64(SSBUSYNC_GET_SMOOTH_FPS_SYMBOL)
+}
+
+/// Reads the instantaneous frametime in milliseconds reported by the remote runtime.
+pub fn instant_frametime_ms() -> Option<f64> {
+    call_f64(SSBUSYNC_GET_INSTANT_FRAMETIME_MS_SYMBOL)
+}
+
+/// Reads the smoothed frametime in milliseconds reported by the remote runtime.
+pub fn smooth_frametime_ms() -> Option<f64> {
+    call_f64(SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL)
+}
+
+/// Returns the remote frametime-history ring capacity.
+pub fn frametime_history_capacity() -> Option<usize> {
+    call_usize(SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL)
+}
+
+/// Copies recent frametime samples into `out` and returns the copied sample count.
+pub fn copy_frametime_history(out: &mut [f32]) -> Option<usize> {
+    if out.is_empty() {
+        return Some(0);
+    }
+    call_copy_f32_slice(SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL, out)
 }
 
 /// Fetches the current environment flags for ssbusync.
