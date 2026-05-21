@@ -24,6 +24,24 @@ pub const SSBUSYNC_GET_BUFFER_MODE_SYMBOL: &[u8] = b"ssbusync_get_buffer_mode\0"
 pub const SSBUSYNC_SET_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_set_index_mode\0";
 pub const SSBUSYNC_GET_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_get_index_mode\0";
 pub const SSBUSYNC_INSTALL_SYMBOL: &[u8] = b"ssbusync_install\0";
+pub const SSBUSYNC_SET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL: &[u8] =
+    b"ssbusync_set_dynamic_resolution_enabled\0";
+pub const SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL: &[u8] =
+    b"ssbusync_get_dynamic_resolution_enabled\0";
+pub const SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL: &[u8] =
+    b"ssbusync_set_default_game_resolution_level\0";
+pub const SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL: &[u8] =
+    b"ssbusync_get_default_game_resolution_level\0";
+pub const SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_SYMBOL: &[u8] =
+    b"ssbusync_get_default_game_resolution\0";
+pub const SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_SYMBOL: &[u8] =
+    b"ssbusync_get_current_game_resolution\0";
+pub const SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_SYMBOL: &[u8] =
+    b"ssbusync_get_apparent_game_resolution\0";
+pub const SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_SYMBOL: &[u8] = b"ssbusync_push_dynamic_res_report\0";
+pub const SSBUSYNC_POP_DYNAMIC_RES_REPORT_SYMBOL: &[u8] = b"ssbusync_pop_dynamic_res_report\0";
+pub const SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_SYMBOL: &[u8] =
+    b"ssbusync_clear_all_dynamic_res_report\0";
 pub const SSBUSYNC_SET_OVERCLOCK_PROFILE_SYMBOL: &[u8] = b"ssbusync_set_overclock_profile\0";
 pub const SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL: &[u8] =
     b"ssbusync_current_overclock_profile\0";
@@ -223,6 +241,34 @@ pub enum OverclockProfile {
     Rest = 3,
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolutionLevel {
+    Res1920x1080 = 0,
+    Res1600x900 = 1,
+    Res1280x720 = 2,
+    Res1024x576 = 3,
+}
+
+impl ResolutionLevel {
+    pub fn from_u32(value: u32) -> Option<Self> {
+        match value {
+            0 => Some(Self::Res1920x1080),
+            1 => Some(Self::Res1600x900),
+            2 => Some(Self::Res1280x720),
+            3 => Some(Self::Res1024x576),
+            _ => None,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Resolution {
+    pub width: u32,
+    pub height: u32,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct NsTuffStatus {
@@ -362,6 +408,61 @@ pub fn status() -> Option<u32> {
 /// Returns `None` when the install symbol is unavailable.
 pub fn install(config: SsbuSyncConfig) -> Option<()> {
     call_struct(SSBUSYNC_INSTALL_SYMBOL, config)
+}
+
+/// Enables or disables dynamic resolution in the remote runtime.
+pub fn set_dynamic_resolution_enabled(enabled: bool) -> Option<bool> {
+    call_u32_u32(
+        SSBUSYNC_SET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL,
+        u32::from(enabled),
+    )
+    .map(|value| value != 0)
+}
+
+/// Reads whether dynamic resolution is enabled in the remote runtime.
+pub fn dynamic_resolution_enabled() -> Option<bool> {
+    call_u32(SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL).map(|value| value != 0)
+}
+
+/// Sets the default game resolution level used by the remote runtime.
+pub fn set_default_game_resolution_level(level: ResolutionLevel) -> Option<bool> {
+    call_u32_u32(SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL, level as u32)
+        .map(|value| value != 0)
+}
+
+/// Reads the default game resolution level in the remote runtime.
+pub fn default_game_resolution_level() -> Option<Option<ResolutionLevel>> {
+    call_u32(SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL).map(ResolutionLevel::from_u32)
+}
+
+/// Reads the default game resolution in the remote runtime.
+pub fn default_game_resolution() -> Option<Resolution> {
+    call_fill_struct(SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_SYMBOL)
+}
+
+/// Reads the current game resolution in the remote runtime.
+pub fn current_game_resolution() -> Option<Resolution> {
+    call_fill_struct(SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_SYMBOL)
+}
+
+/// Reads the apparent game resolution in the remote runtime.
+pub fn apparent_game_resolution() -> Option<Resolution> {
+    call_fill_struct(SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_SYMBOL)
+}
+
+/// Pushes a dynamic-resolution report level into the remote runtime.
+pub fn push_dynamic_res_report(level: ResolutionLevel) -> Option<bool> {
+    call_u32_u32(SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_SYMBOL, level as u32).map(|value| value != 0)
+}
+
+/// Removes one dynamic-resolution report level from the remote runtime.
+pub fn pop_dynamic_res_report(level: ResolutionLevel) -> Option<bool> {
+    call_u32_u32(SSBUSYNC_POP_DYNAMIC_RES_REPORT_SYMBOL, level as u32).map(|value| value != 0)
+}
+
+/// Clears all dynamic-resolution reports from the remote runtime.
+pub fn clear_all_dynamic_res_report() -> Option<bool> {
+    call_u32(SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_SYMBOL).map(|value| value != 0)
 }
 
 /// Fetches the current environment flags for ssbusync.
