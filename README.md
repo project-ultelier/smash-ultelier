@@ -111,3 +111,47 @@ let _ = ultelier::sync_guest::events::clear_typed_index_backend_changed();
 let _ = ultelier::sync_guest::events::clear_typed_vsync_changed();
 let _ = ultelier::sync_guest::events::clear_typed_render_opts_changed();
 ```
+
+## Resolution API
+
+`sync_guest` also exposes helpers for default and runtime resolution control.
+
+Default game resolution configuration:
+
+- `set_default_game_resolution_level(level)` sets the baseline internal render level.
+- `default_game_resolution_level()` reads the configured baseline as `Option<ResolutionLevel>`.
+- `default_game_resolution()` reads the concrete `Resolution { width, height }` for the baseline.
+
+Dynamic resolution control:
+
+- `set_dynamic_resolution_enabled(enabled)` turns dynamic resolution on/off in the runtime.
+- `dynamic_resolution_enabled()` reads whether dynamic resolution is currently enabled.
+- `current_game_resolution()` reads the currently applied resolutions. If dynamic resolution is off, this returns the default resolution. Otherwise returns the currently applied dynamic resolution.
+- `apparent_game_resolution()` reads the actual/effective resolution of the last presented frame.
+- `push_dynamic_res_report(level)` requests a temporary dynamic-res level.
+- `pop_dynamic_res_report(level)` removes one matching dynamic-res request.
+- `clear_all_dynamic_res_report()` clears all pushed dynamic-res requests.
+
+Example:
+
+```rust
+use ultelier::sync_guest::{self as sync, ResolutionLevel};
+
+pub fn on_game_start() {
+    let _ = sync::set_dynamic_resolution_enabled(true);
+    let _ = sync::set_default_game_resolution_level(ResolutionLevel::Res1280x720);
+}
+
+pub fn on_game_frame() {
+    if intensive_effect_started() {
+        let _ = sync::push_dynamic_res_report(ResolutionLevel::Res1280x720);
+    } else if intensive_effect_ended() {
+        let _ = sync::pop_dynamic_res_report(ResolutionLevel::Res1280x720);
+    }
+}
+
+pub fn on_game_end() {
+    let _ = sync::set_dynamic_resolution_enabled(false);
+    let _ = sync:clear_all_dynamic_res_report();
+}
+```
