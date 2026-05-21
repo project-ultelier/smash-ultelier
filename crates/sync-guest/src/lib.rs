@@ -10,11 +10,20 @@ pub const SSBUSYNC_ENV_GET_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_get_flags\0";
 pub const SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_replace_flags\0";
 pub const SSBUSYNC_ENV_SET_FLAG_SYMBOL: &[u8] = b"ssbusync_env_set_flag\0";
 pub const SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_vsync_enabled\0";
+pub const SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_vsync_enabled\0";
+pub const SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_render_opts_enabled\0";
+pub const SSBUSYNC_GET_RENDER_OPTS_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_render_opts_enabled\0";
 pub const SSBUSYNC_SET_PACER_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_pacer_enabled\0";
+pub const SSBUSYNC_GET_PACER_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_pacer_enabled\0";
 pub const SSBUSYNC_SET_TRIPLE_BUFFER_ENABLED_SYMBOL: &[u8] =
     b"ssbusync_set_triple_buffer_enabled\0";
+pub const SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_SYMBOL: &[u8] =
+    b"ssbusync_get_triple_buffer_enabled\0";
 pub const SSBUSYNC_SET_BUFFER_MODE_SYMBOL: &[u8] = b"ssbusync_set_buffer_mode\0";
+pub const SSBUSYNC_GET_BUFFER_MODE_SYMBOL: &[u8] = b"ssbusync_get_buffer_mode\0";
 pub const SSBUSYNC_SET_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_set_index_mode\0";
+pub const SSBUSYNC_GET_INDEX_MODE_SYMBOL: &[u8] = b"ssbusync_get_index_mode\0";
+pub const SSBUSYNC_INSTALL_SYMBOL: &[u8] = b"ssbusync_install\0";
 pub const SSBUSYNC_SET_OVERCLOCK_PROFILE_SYMBOL: &[u8] = b"ssbusync_set_overclock_profile\0";
 pub const SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL: &[u8] =
     b"ssbusync_current_overclock_profile\0";
@@ -105,7 +114,20 @@ impl EnvironmentFlags {
     }
 }
 
-#[repr(u32)]
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SsbuSyncConfig {
+    pub enable_vsync: bool,
+    pub enable_render_opts: bool,
+    pub enabled_pacer: bool,
+    pub slow_pacer_bias: bool,
+    pub enable_triple_buffer: bool,
+    pub index_mode: IndexMode,
+    pub profiling: bool,
+    pub overclocker: bool,
+}
+
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Remote buffer-ring mode.
 pub enum BufferMode {
@@ -133,7 +155,7 @@ impl BufferMode {
     }
 }
 
-#[repr(u32)]
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Remote frame-index policy.
 pub enum IndexMode {
@@ -247,6 +269,13 @@ fn call_u32_u32_u32(symbol: &'static [u8], first: u32, second: u32) -> Option<u3
     Some(func(first, second))
 }
 
+fn call_struct<T: Copy>(symbol: &'static [u8], value: T) -> Option<()> {
+    let addr = lookup_symbol_addr(symbol)?;
+    let func: extern "C" fn(T) = unsafe { core::mem::transmute(addr) };
+    func(value);
+    Some(())
+}
+
 fn call_void(symbol: &'static [u8]) -> Option<()> {
     let addr = lookup_symbol_addr(symbol)?;
     let func: extern "C" fn() = unsafe { core::mem::transmute(addr) };
@@ -295,6 +324,14 @@ pub fn remote_present() -> bool {
 /// ```
 pub fn status() -> Option<u32> {
     call_u32(SSBUSYNC_STATUS_SYMBOL)
+}
+
+/// Requests that the remote plugin install and initialize with the supplied
+/// config.
+///
+/// Returns `None` when the install symbol is unavailable.
+pub fn install(config: SsbuSyncConfig) -> Option<()> {
+    call_struct(SSBUSYNC_INSTALL_SYMBOL, config)
 }
 
 /// Fetches the current environment flags for ssbusync.
@@ -354,6 +391,27 @@ pub fn set_vsync_enabled(enabled: bool) -> Option<bool> {
     call_u32_u32(SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL, u32::from(enabled)).map(|value| value != 0)
 }
 
+/// Reads whether vsync is enabled in the remote runtime.
+pub fn vsync_enabled() -> Option<bool> {
+    call_u32(SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL).map(|value| value != 0)
+}
+
+/// Enables or disables render-opts in the remote runtime.
+///
+/// # Example
+/// ```ignore
+/// let applied = ultelier::sync_guest::set_render_opts_enabled(true);
+/// ```
+pub fn set_render_opts_enabled(enabled: bool) -> Option<bool> {
+    call_u32_u32(SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL, u32::from(enabled))
+        .map(|value| value != 0)
+}
+
+/// Reads whether render-opts are enabled in the remote runtime.
+pub fn render_opts_enabled() -> Option<bool> {
+    call_u32(SSBUSYNC_GET_RENDER_OPTS_ENABLED_SYMBOL).map(|value| value != 0)
+}
+
 /// Enables or disables the pacer in the remote runtime.
 ///
 /// # Example
@@ -362,6 +420,11 @@ pub fn set_vsync_enabled(enabled: bool) -> Option<bool> {
 /// ```
 pub fn set_pacer_enabled(enabled: bool) -> Option<bool> {
     call_u32_u32(SSBUSYNC_SET_PACER_ENABLED_SYMBOL, u32::from(enabled)).map(|value| value != 0)
+}
+
+/// Reads whether the pacer is enabled in the remote runtime.
+pub fn pacer_enabled() -> Option<bool> {
+    call_u32(SSBUSYNC_GET_PACER_ENABLED_SYMBOL).map(|value| value != 0)
 }
 
 /// Convenience wrapper for switching between the live double- and triple-buffer
@@ -385,6 +448,11 @@ pub fn set_triple_buffer_enabled(enabled: bool) -> Option<bool> {
         u32::from(enabled),
     )
     .map(|value| value != 0)
+}
+
+/// Reads whether triple buffering is enabled in the remote runtime.
+pub fn triple_buffer_enabled() -> Option<bool> {
+    call_u32(SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_SYMBOL).map(|value| value != 0)
 }
 
 /// Requests a live buffer-ring transition to double or triple buffering.
@@ -430,6 +498,11 @@ pub fn set_buffer_mode(mode: BufferMode) -> Option<bool> {
     call_u32_u32(SSBUSYNC_SET_BUFFER_MODE_SYMBOL, mode as u32).map(|value| value != 0)
 }
 
+/// Reads the current remote buffer mode.
+pub fn buffer_mode() -> Option<Option<BufferMode>> {
+    call_u32(SSBUSYNC_GET_BUFFER_MODE_SYMBOL).map(BufferMode::from_u32)
+}
+
 /// Overrides the frame-index policy used by ssbusync.
 ///
 /// This does not by itself request a double/triple buffer-ring transition.
@@ -445,6 +518,11 @@ pub fn set_buffer_mode(mode: BufferMode) -> Option<bool> {
 #[doc(hidden)]
 pub fn set_index_mode(mode: IndexMode) -> Option<bool> {
     call_u32_u32(SSBUSYNC_SET_INDEX_MODE_SYMBOL, mode as u32).map(|value| value != 0)
+}
+
+/// Reads the current remote index mode.
+pub fn index_mode() -> Option<Option<IndexMode>> {
+    call_u32(SSBUSYNC_GET_INDEX_MODE_SYMBOL).map(IndexMode::from_u32)
 }
 
 /// Requests a specific remote overclock profile.
