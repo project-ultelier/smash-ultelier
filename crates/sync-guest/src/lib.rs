@@ -9,6 +9,8 @@ pub const SSBUSYNC_STATUS_SYMBOL: &[u8] = b"ssbusync_status\0";
 pub const SSBUSYNC_ENV_GET_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_get_flags\0";
 pub const SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_replace_flags\0";
 pub const SSBUSYNC_ENV_SET_FLAG_SYMBOL: &[u8] = b"ssbusync_env_set_flag\0";
+pub const SSBUSYNC_SET_VANILLA_RUNTIME_SYMBOL: &[u8] = b"ssbusync_set_vanilla_runtime\0";
+pub const SSBUSYNC_IS_VANILLA_RUNTIME_SYMBOL: &[u8] = b"ssbusync_is_vanilla_runtime\0";
 pub const SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_vsync_enabled\0";
 pub const SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_vsync_enabled\0";
 pub const SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_render_opts_enabled\0";
@@ -577,6 +579,21 @@ pub fn replace_env_flags(flags: EnvironmentFlags) -> Option<EnvironmentFlags> {
 pub fn set_env_flag(mask: u32, enabled: bool) -> Option<EnvironmentFlags> {
     call_u32_u32_u32(SSBUSYNC_ENV_SET_FLAG_SYMBOL, mask, u32::from(enabled))
         .map(EnvironmentFlags::new)
+}
+
+/// Convenience functions to disable all optimizations and set the runtime to vanilla
+///
+/// # Example
+/// ```ignore
+/// let applied = ultelier::sync_guest::set_vanilla_runtime();
+/// ```
+pub fn set_vanilla_runtime() -> Option<bool> {
+    call_u32(SSBUSYNC_SET_VANILLA_RUNTIME_SYMBOL).map(|value| value != 0)
+}
+
+/// Reads whether the runtime is vanilla or not.
+pub fn is_vanilla_runtime() -> Option<bool> {
+    call_u32(SSBUSYNC_IS_VANILLA_RUNTIME_SYMBOL).map(|value| value != 0)
 }
 
 /// Enables or disables vsync in the remote runtime.
