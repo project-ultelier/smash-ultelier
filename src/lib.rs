@@ -32,13 +32,18 @@ pub fn panic_hook() {
     }));
 }
 
-#[cfg(feature = "no-dep")]
-#[skyline::main(name = "ultelier")]
-pub fn main() {
+pub fn install() {
     #[cfg(feature = "console")]
-    panic_hook();
+    {
+        console::install();
+        panic_hook();
+    }
     #[cfg(feature = "auto-profile-switcher")]
     sync_guest::runtime::install_auto_profile_switcher();
-    #[cfg(feature = "console")]
-    console::install();
+}
+
+#[cfg(feature = "no-dep")]
+#[skyline::main(name = "ultelier")]
+fn main() {
+    install();
 }

@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["sync-guest"]
 no-dep = ["sync-guest"]
 plugin = ["no-dep", "console"]
-console = ["dep:imgui-api", "dep:nsuite"]
+console = ["dep:imgui-api", "dep:nsuite", "sync-guest"]
 auto-profile-switcher = ["sync-guest"]
 sync-guest = ["dep:ssbusync_guest"]
 

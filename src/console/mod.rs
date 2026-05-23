@@ -6,9 +6,7 @@ use std::sync::{Mutex, Once, OnceLock};
 use imgui_api::bindings::*;
 use nsuite::ninput;
 
-use crate::sync_guest::{
-    self, profile, BufferMode, EnvironmentFlags, FrameIndexMode, IndexBackend, OverclockProfile,
-};
+use crate::sync_guest::{self, profile, BufferMode, EnvironmentFlags, IndexMode, OverclockProfile};
 
 const MAX_LOG_LINES: usize = 256;
 const COMMAND_BUFFER_LEN: usize = 256;
@@ -17,7 +15,7 @@ const AUTO_REFRESH_FRAMES: u32 = 30;
 const WINDOW_TITLE: &[u8] = b"Ultelier Debug Console\0";
 const LOG_CHILD_ID: &[u8] = b"ultelier_console_log\0";
 const COMMAND_LABEL: &[u8] = b"##ultelier_console_command\0";
-const COMMAND_HINT: &[u8] = b"help | refresh | vsync on | buffer triple\0";
+const COMMAND_HINT: &[u8] = b"help | refresh | render on | index onebehind\0";
 
 const SECTION_RUNTIME: &[u8] = b"Runtime\0";
 const SECTION_GRAPHICS: &[u8] = b"ngpu / NVN\0";
@@ -32,17 +30,15 @@ const BUTTON_RUN: &[u8] = b"Run\0";
 
 const BUTTON_VSYNC_ON: &[u8] = b"VSync On\0";
 const BUTTON_VSYNC_OFF: &[u8] = b"VSync Off\0";
+const BUTTON_RENDER_OPTS_ON: &[u8] = b"Render Opts On\0";
+const BUTTON_RENDER_OPTS_OFF: &[u8] = b"Render Opts Off\0";
 const BUTTON_PACER_ON: &[u8] = b"Pacer On\0";
 const BUTTON_PACER_OFF: &[u8] = b"Pacer Off\0";
 const BUTTON_BUFFER_DOUBLE: &[u8] = b"Buffer Double\0";
 const BUTTON_BUFFER_TRIPLE: &[u8] = b"Buffer Triple\0";
-const BUTTON_BACKEND_DYNAMIC: &[u8] = b"Backend Dynamic\0";
-const BUTTON_BACKEND_STATIC: &[u8] = b"Backend Static\0";
-const BUTTON_FRAME_IMMEDIATE: &[u8] = b"Frame Immediate\0";
-const BUTTON_FRAME_DOUBLE: &[u8] = b"Frame Double\0";
-const BUTTON_FRAME_TRIPLE: &[u8] = b"Frame Triple\0";
-const BUTTON_FRAME_VANILLA: &[u8] = b"Frame Vanilla\0";
-const BUTTON_FRAME_FROZEN: &[u8] = b"Frame Frozen\0";
+const BUTTON_INDEX_IMMEDIATE: &[u8] = b"Index Immediate\0";
+const BUTTON_INDEX_ONE_BEHIND: &[u8] = b"Index OneBehind\0";
+const BUTTON_INDEX_TWO_BEHIND: &[u8] = b"Index TwoBehind\0";
 
 const CHECKBOX_SHOW_MOUSE: &[u8] = b"Show Mouse\0";
 const CHECKBOX_AUTO_SCROLL: &[u8] = b"Auto Scroll\0";
@@ -53,17 +49,17 @@ static CONSOLE_STATE: OnceLock<Mutex<ConsoleState>> = OnceLock::new();
 #[derive(Debug, Clone, Copy, Default)]
 struct RemoteSnapshot {
     remote_present: bool,
-    runtime_status: Option<u32>,
+    runtime_status: Option<bool>,
     nstuff_status: Option<sync_guest::NsTuffStatus>,
     overclock_safe_profiles: Option<bool>,
     env_flags: Option<EnvironmentFlags>,
     overclock_profile: Option<OverclockProfile>,
     docked_profile: Option<profile::DockedProfile>,
     vsync_enabled: Option<bool>,
+    render_opts_enabled: Option<bool>,
     pacer_enabled: Option<bool>,
     buffer_mode: Option<BufferMode>,
-    index_mode: Option<FrameIndexMode>,
-    index_backend: Option<IndexBackend>,
+    index_mode: Option<IndexMode>,
 }
 
 #[derive(Debug)]
@@ -114,10 +110,10 @@ enum Action {
     RegisterCallbacks,
     ClearLog,
     SetVsync(bool),
+    SetRenderOpts(bool),
     SetPacer(bool),
     SetBufferMode(BufferMode),
-    SetIndexBackend(IndexBackend),
-    SetFrameIndexMode(FrameIndexMode),
+    SetIndexMode(IndexMode),
     RunCommand(String),
 }
 
@@ -134,10 +130,10 @@ pub fn install() {
     INSTALL_ONCE.call_once(|| {
         with_state(|state| {
             state.push_log("installing imgui draw callback");
+            state.push_log("initial snapshot deferred until first draw");
         });
         imgui_api::imgui_setup_context(setup_imgui_context);
         imgui_api::imgui_smash_add_on_draw_frame(draw as _);
-        refresh_snapshot(true);
     });
 }
 
@@ -214,7 +210,7 @@ unsafe fn render_runtime_section(state: &ConsoleState) {
     ));
     text_line(&format!(
         "runtime initialized: {}",
-        option_u32(state.snapshot.runtime_status)
+        option_bool(state.snapshot.runtime_status)
     ));
     text_line(&format!(
         "overclock preset: {} | active profile: {} | docked slot: {}",
@@ -241,15 +237,15 @@ unsafe fn render_runtime_section(state: &ConsoleState) {
         on_off(state.callbacks_registered)
     ));
     text_line(&format!(
-        "vsync: {} | pacer: {} | buffer: {}",
+        "vsync: {} | render_opts: {} | pacer: {} | buffer: {}",
         option_bool(state.snapshot.vsync_enabled),
+        option_bool(state.snapshot.render_opts_enabled),
         option_bool(state.snapshot.pacer_enabled),
         option_buffer_mode(state.snapshot.buffer_mode)
     ));
     text_line(&format!(
-        "frame mode: {} | backend: {}",
-        option_frame_mode(state.snapshot.index_mode),
-        option_index_backend(state.snapshot.index_backend)
+        "index mode: {}",
+        option_index_mode(state.snapshot.index_mode)
     ));
     text_line(&format!(
         "env flags: {}",
@@ -260,23 +256,25 @@ unsafe fn render_runtime_section(state: &ConsoleState) {
             .unwrap_or_else(|| "unavailable".to_string())
     ));
     text_line(&format!(
-        "allow_swap={} triple={} vsync_disabled={} pacer_disabled={}",
-        option_flag(
-            state.snapshot.env_flags,
-            EnvironmentFlags::ALLOW_BUFFER_SWAP
-        ),
+        "swapping_buffer={} swapping_index={} triple={} index_mode={}",
+        option_flag(state.snapshot.env_flags, EnvironmentFlags::SWAPPING_BUFFER),
+        option_flag(state.snapshot.env_flags, EnvironmentFlags::SWAPPING_INDEX),
         option_flag(state.snapshot.env_flags, EnvironmentFlags::TRIPLE_ENABLED),
-        option_flag(state.snapshot.env_flags, EnvironmentFlags::VSYNC_DISABLED),
-        option_flag(state.snapshot.env_flags, EnvironmentFlags::PACER_DISABLED)
+        option_index_mode_field(state.snapshot.env_flags)
     ));
     text_line(&format!(
-        "profiling={} slow_pacer_bias={} emulator={} overclocker={}",
+        "vsync={} render_opts={} pacer={} profiling={} slow_pacer_bias={} overclocker={}",
+        option_flag(state.snapshot.env_flags, EnvironmentFlags::VSYNC_ENABLED),
+        option_flag(
+            state.snapshot.env_flags,
+            EnvironmentFlags::RENDER_OPTS_ENABLED
+        ),
+        option_flag(state.snapshot.env_flags, EnvironmentFlags::PACER_ENABLED),
         option_flag(
             state.snapshot.env_flags,
             EnvironmentFlags::PROFILING_ENABLED
         ),
         option_flag(state.snapshot.env_flags, EnvironmentFlags::SLOW_PACER_BIAS),
-        option_emulator(state.snapshot.env_flags),
         option_flag(state.snapshot.env_flags, EnvironmentFlags::OVERCLOCKER)
     ));
 }
@@ -380,6 +378,14 @@ unsafe fn render_quick_actions_section(actions: &mut Vec<Action>, state: &mut Co
         actions.push(Action::SetVsync(false));
     }
     igSameLine(0.0, 16.0);
+    if igButton(BUTTON_RENDER_OPTS_ON.as_ptr() as _, zero_vec2()) {
+        actions.push(Action::SetRenderOpts(true));
+    }
+    igSameLine(0.0, 8.0);
+    if igButton(BUTTON_RENDER_OPTS_OFF.as_ptr() as _, zero_vec2()) {
+        actions.push(Action::SetRenderOpts(false));
+    }
+    igSameLine(0.0, 16.0);
     if igButton(BUTTON_PACER_ON.as_ptr() as _, zero_vec2()) {
         actions.push(Action::SetPacer(true));
     }
@@ -395,39 +401,24 @@ unsafe fn render_quick_actions_section(actions: &mut Vec<Action>, state: &mut Co
     if igButton(BUTTON_BUFFER_TRIPLE.as_ptr() as _, zero_vec2()) {
         actions.push(Action::SetBufferMode(BufferMode::Triple));
     }
-    igSameLine(0.0, 16.0);
-    if igButton(BUTTON_BACKEND_DYNAMIC.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetIndexBackend(IndexBackend::Dynamic));
-    }
-    igSameLine(0.0, 8.0);
-    if igButton(BUTTON_BACKEND_STATIC.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetIndexBackend(IndexBackend::Static));
-    }
 
-    if igButton(BUTTON_FRAME_IMMEDIATE.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetFrameIndexMode(FrameIndexMode::Immediate));
+    igSameLine(0.0, 16.0);
+    if igButton(BUTTON_INDEX_IMMEDIATE.as_ptr() as _, zero_vec2()) {
+        actions.push(Action::SetIndexMode(IndexMode::Immediate));
     }
     igSameLine(0.0, 8.0);
-    if igButton(BUTTON_FRAME_DOUBLE.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetFrameIndexMode(FrameIndexMode::Double));
+    if igButton(BUTTON_INDEX_ONE_BEHIND.as_ptr() as _, zero_vec2()) {
+        actions.push(Action::SetIndexMode(IndexMode::OneBehind));
     }
     igSameLine(0.0, 8.0);
-    if igButton(BUTTON_FRAME_TRIPLE.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetFrameIndexMode(FrameIndexMode::Triple));
-    }
-    igSameLine(0.0, 8.0);
-    if igButton(BUTTON_FRAME_VANILLA.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetFrameIndexMode(FrameIndexMode::Vanilla));
-    }
-    igSameLine(0.0, 8.0);
-    if igButton(BUTTON_FRAME_FROZEN.as_ptr() as _, zero_vec2()) {
-        actions.push(Action::SetFrameIndexMode(FrameIndexMode::Frozen));
+    if igButton(BUTTON_INDEX_TWO_BEHIND.as_ptr() as _, zero_vec2()) {
+        actions.push(Action::SetIndexMode(IndexMode::TwoBehind));
     }
 }
 
 unsafe fn render_command_section(actions: &mut Vec<Action>, state: &mut ConsoleState) {
     igSeparatorText(SECTION_COMMAND.as_ptr() as _);
-    text_line("commands: help, refresh, clear, mouse on/off, vsync on/off, pacer on/off, buffer double/triple, backend dynamic/static, frame immediate/double/triple/vanilla/frozen");
+    text_line("commands: help, refresh, clear, mouse on/off, vsync on/off, render on/off, pacer on/off, buffer double/triple, index immediate/onebehind/twobehind");
 
     let submitted = igInputTextWithHint(
         COMMAND_LABEL.as_ptr() as _,
@@ -487,6 +478,11 @@ fn perform_action(action: Action) {
             log_guest_call("set_vsync_enabled", enabled, result);
             refresh_snapshot(false);
         }
+        Action::SetRenderOpts(enabled) => {
+            let result = sync_guest::set_render_opts_enabled(enabled);
+            log_guest_call("set_render_opts_enabled", enabled, result);
+            refresh_snapshot(false);
+        }
         Action::SetPacer(enabled) => {
             let result = sync_guest::set_pacer_enabled(enabled);
             log_guest_call("set_pacer_enabled", enabled, result);
@@ -503,23 +499,12 @@ fn perform_action(action: Action) {
             });
             refresh_snapshot(false);
         }
-        Action::SetIndexBackend(mode) => {
-            let result = sync_guest::set_index_backend(mode);
+        Action::SetIndexMode(mode) => {
+            let result = sync_guest::set_index_mode(mode);
             with_state(|state| {
                 state.push_log(format!(
-                    "set_index_backend({}) -> {}",
-                    index_backend_name(mode),
-                    guest_result(result)
-                ));
-            });
-            refresh_snapshot(false);
-        }
-        Action::SetFrameIndexMode(mode) => {
-            let result = sync_guest::set_frame_index_mode(mode);
-            with_state(|state| {
-                state.push_log(format!(
-                    "set_frame_index_mode({}) -> {}",
-                    frame_mode_name(mode),
+                    "set_index_mode({}) -> {}",
+                    index_mode_name(mode),
                     guest_result(result)
                 ));
             });
@@ -572,10 +557,9 @@ fn run_command(command: String) {
             with_state(|state| {
                 state.push_log("help: refresh | clear | callbacks");
                 state.push_log("help: mouse on/off");
-                state.push_log("help: vsync on/off | pacer on/off");
+                state.push_log("help: vsync on/off | render on/off | pacer on/off");
                 state.push_log("help: buffer double/triple");
-                state.push_log("help: backend dynamic/static");
-                state.push_log("help: frame immediate/double/triple/vanilla/frozen");
+                state.push_log("help: index immediate/onebehind/twobehind");
             });
         }
         "refresh" | "status" => refresh_snapshot(true),
@@ -599,6 +583,11 @@ fn run_command(command: String) {
             Some("off") => perform_action(Action::SetVsync(false)),
             _ => push_invalid_command("vsync expects 'on' or 'off'"),
         },
+        "render" | "renderopts" => match parts.next() {
+            Some("on") => perform_action(Action::SetRenderOpts(true)),
+            Some("off") => perform_action(Action::SetRenderOpts(false)),
+            _ => push_invalid_command("render expects 'on' or 'off'"),
+        },
         "pacer" => match parts.next() {
             Some("on") => perform_action(Action::SetPacer(true)),
             Some("off") => perform_action(Action::SetPacer(false)),
@@ -609,20 +598,15 @@ fn run_command(command: String) {
             Some("triple") => perform_action(Action::SetBufferMode(BufferMode::Triple)),
             _ => push_invalid_command("buffer expects 'double' or 'triple'"),
         },
-        "backend" | "index" => match parts.next() {
-            Some("dynamic") => perform_action(Action::SetIndexBackend(IndexBackend::Dynamic)),
-            Some("static") => perform_action(Action::SetIndexBackend(IndexBackend::Static)),
-            _ => push_invalid_command("backend expects 'dynamic' or 'static'"),
-        },
-        "frame" => match parts.next() {
-            Some("immediate") => {
-                perform_action(Action::SetFrameIndexMode(FrameIndexMode::Immediate))
+        "index" | "frame" => match parts.next() {
+            Some("immediate") => perform_action(Action::SetIndexMode(IndexMode::Immediate)),
+            Some("onebehind") | Some("double") => {
+                perform_action(Action::SetIndexMode(IndexMode::OneBehind))
             }
-            Some("double") => perform_action(Action::SetFrameIndexMode(FrameIndexMode::Double)),
-            Some("triple") => perform_action(Action::SetFrameIndexMode(FrameIndexMode::Triple)),
-            Some("vanilla") => perform_action(Action::SetFrameIndexMode(FrameIndexMode::Vanilla)),
-            Some("frozen") => perform_action(Action::SetFrameIndexMode(FrameIndexMode::Frozen)),
-            _ => push_invalid_command("frame expects immediate/double/triple/vanilla/frozen"),
+            Some("twobehind") | Some("triple") | Some("vanilla") | Some("frozen") => {
+                perform_action(Action::SetIndexMode(IndexMode::TwoBehind))
+            }
+            _ => push_invalid_command("index expects immediate/onebehind/twobehind"),
         },
         _ => push_invalid_command("unknown command; type 'help'"),
     }
@@ -665,9 +649,11 @@ fn maybe_register_callbacks(verbose: bool) {
         return;
     }
 
-    let ok = sync_guest::events::set_typed_vsync_changed(on_vsync_changed)
-        && sync_guest::events::set_typed_buffer_mode_changed(on_buffer_mode_changed)
-        && sync_guest::events::set_typed_index_backend_changed(on_index_backend_changed);
+    let vsync_ok = sync_guest::events::set_typed_vsync_changed(on_vsync_changed);
+    let render_ok = sync_guest::events::set_typed_render_opts_changed(on_render_opts_changed);
+    let buffer_ok = sync_guest::events::set_typed_buffer_mode_changed(on_buffer_mode_changed);
+    let index_ok = sync_guest::events::set_typed_index_mode_changed(on_index_mode_changed);
+    let ok = vsync_ok && render_ok && buffer_ok && index_ok;
 
     with_state(|state| {
         state.callbacks_registered = ok;
@@ -681,17 +667,17 @@ fn maybe_register_callbacks(verbose: bool) {
 
 fn refresh_snapshot(verbose: bool) {
     maybe_register_callbacks(false);
-
     let remote_present = sync_guest::remote_present();
-    let runtime_status = sync_guest::status();
+    let runtime_status = sync_guest::initialized();
     let nstuff_status = sync_guest::current_nstuff_status();
     let overclock_safe_profiles = sync_guest::overclock_uses_safe_profiles();
     let env_flags = sync_guest::env_flags();
     let overclock_profile = sync_guest::current_overclock_profile().flatten();
+
     let docked_profile =
         overclock_profile.and_then(|profile| profile::docked_profile_map().state_for(profile));
-    let index_mode = sync_guest::current_index_mode();
-    let index_backend = sync_guest::current_index_backend();
+    let index_mode = sync_guest::index_mode().flatten();
+    let render_opts_enabled = sync_guest::render_opts_enabled();
 
     let snapshot = RemoteSnapshot {
         remote_present,
@@ -701,8 +687,9 @@ fn refresh_snapshot(verbose: bool) {
         env_flags,
         overclock_profile,
         docked_profile,
-        vsync_enabled: env_flags.map(|flags| !flags.contains(EnvironmentFlags::VSYNC_DISABLED)),
-        pacer_enabled: env_flags.map(|flags| !flags.contains(EnvironmentFlags::PACER_DISABLED)),
+        vsync_enabled: env_flags.map(|flags| flags.contains(EnvironmentFlags::VSYNC_ENABLED)),
+        render_opts_enabled,
+        pacer_enabled: env_flags.map(|flags| flags.contains(EnvironmentFlags::PACER_ENABLED)),
         buffer_mode: env_flags.map(|flags| {
             if flags.contains(EnvironmentFlags::TRIPLE_ENABLED) {
                 BufferMode::Triple
@@ -711,7 +698,6 @@ fn refresh_snapshot(verbose: bool) {
             }
         }),
         index_mode,
-        index_backend,
     };
 
     with_state(|state| {
@@ -725,9 +711,9 @@ fn refresh_snapshot(verbose: bool) {
         }
         if verbose {
             state.push_log(format!(
-                "snapshot: remote={} runtime={} profile={} uv={} gpu_mv={} vsync={} pacer={} buffer={} frame={} backend={}",
+                "snapshot: remote={} runtime={} profile={} uv={} gpu_mv={} vsync={} render_opts={} pacer={} buffer={} index={}",
                 on_off(snapshot.remote_present),
-                option_u32(snapshot.runtime_status),
+                option_bool(snapshot.runtime_status),
                 format!(
                     "{}:{}",
                     option_overclock_preset(snapshot.overclock_safe_profiles),
@@ -736,10 +722,10 @@ fn refresh_snapshot(verbose: bool) {
                 option_uv_state(snapshot.nstuff_status),
                 option_uv_gpu_mv(snapshot.nstuff_status),
                 option_bool(snapshot.vsync_enabled),
+                option_bool(snapshot.render_opts_enabled),
                 option_bool(snapshot.pacer_enabled),
                 option_buffer_mode(snapshot.buffer_mode),
-                option_frame_mode(snapshot.index_mode),
-                option_index_backend(snapshot.index_backend)
+                option_index_mode(snapshot.index_mode)
             ));
         }
     });
@@ -749,9 +735,20 @@ extern "C" fn on_vsync_changed(enabled: bool) {
     with_state(|state| {
         state.snapshot.vsync_enabled = Some(enabled);
         if let Some(flags) = state.snapshot.env_flags {
-            state.snapshot.env_flags = Some(flags.with(EnvironmentFlags::VSYNC_DISABLED, !enabled));
+            state.snapshot.env_flags = Some(flags.with(EnvironmentFlags::VSYNC_ENABLED, enabled));
         }
         state.push_log(format!("event: vsync -> {}", on_off(enabled)));
+    });
+}
+
+extern "C" fn on_render_opts_changed(enabled: bool) {
+    with_state(|state| {
+        state.snapshot.render_opts_enabled = Some(enabled);
+        if let Some(flags) = state.snapshot.env_flags {
+            state.snapshot.env_flags =
+                Some(flags.with(EnvironmentFlags::RENDER_OPTS_ENABLED, enabled));
+        }
+        state.push_log(format!("event: render_opts -> {}", on_off(enabled)));
     });
 }
 
@@ -768,16 +765,14 @@ extern "C" fn on_buffer_mode_changed(mode: BufferMode) {
     });
 }
 
-extern "C" fn on_index_backend_changed(mode: IndexBackend) {
+extern "C" fn on_index_mode_changed(mode: IndexMode) {
     with_state(|state| {
-        state.snapshot.index_backend = Some(mode);
+        state.snapshot.index_mode = Some(mode);
         if let Some(flags) = state.snapshot.env_flags {
-            state.snapshot.env_flags = Some(flags.with(
-                EnvironmentFlags::ALLOW_BUFFER_SWAP,
-                matches!(mode, IndexBackend::Dynamic),
-            ));
+            state.snapshot.env_flags =
+                Some(flags.with_value(EnvironmentFlags::INDEX_MODE, mode as u32));
         }
-        state.push_log(format!("event: backend -> {}", index_backend_name(mode)));
+        state.push_log(format!("event: index mode -> {}", index_mode_name(mode)));
     });
 }
 
@@ -833,22 +828,12 @@ fn option_bool(value: Option<bool>) -> &'static str {
     }
 }
 
-fn option_u32(value: Option<u32>) -> String {
-    value
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "unavailable".to_string())
-}
-
 fn option_buffer_mode(value: Option<BufferMode>) -> &'static str {
     value.map(buffer_mode_name).unwrap_or("unknown")
 }
 
-fn option_frame_mode(value: Option<FrameIndexMode>) -> &'static str {
-    value.map(frame_mode_name).unwrap_or("unknown")
-}
-
-fn option_index_backend(value: Option<IndexBackend>) -> &'static str {
-    value.map(index_backend_name).unwrap_or("unknown")
+fn option_index_mode(value: Option<IndexMode>) -> &'static str {
+    value.map(index_mode_name).unwrap_or("unknown")
 }
 
 fn option_overclock_profile(value: Option<OverclockProfile>) -> &'static str {
@@ -874,10 +859,11 @@ fn option_flag(value: Option<EnvironmentFlags>, mask: u32) -> &'static str {
     }
 }
 
-fn option_emulator(value: Option<EnvironmentFlags>) -> &'static str {
-    match value {
-        Some(flags) if !flags.contains(EnvironmentFlags::EMULATOR_KNOWN) => "unknown",
-        Some(flags) => on_off(flags.contains(EnvironmentFlags::EMULATOR_VALUE)),
+fn option_index_mode_field(value: Option<EnvironmentFlags>) -> &'static str {
+    match value
+        .and_then(|flags| IndexMode::from_u32(flags.extract_value(EnvironmentFlags::INDEX_MODE)))
+    {
+        Some(mode) => index_mode_name(mode),
         None => "unknown",
     }
 }
@@ -954,20 +940,11 @@ fn buffer_mode_name(mode: BufferMode) -> &'static str {
     }
 }
 
-fn frame_mode_name(mode: FrameIndexMode) -> &'static str {
+fn index_mode_name(mode: IndexMode) -> &'static str {
     match mode {
-        FrameIndexMode::Immediate => "immediate",
-        FrameIndexMode::Double => "double",
-        FrameIndexMode::Triple => "triple",
-        FrameIndexMode::Vanilla => "vanilla",
-        FrameIndexMode::Frozen => "frozen",
-    }
-}
-
-fn index_backend_name(mode: IndexBackend) -> &'static str {
-    match mode {
-        IndexBackend::Dynamic => "dynamic",
-        IndexBackend::Static => "static",
+        IndexMode::Immediate => "immediate",
+        IndexMode::OneBehind => "onebehind",
+        IndexMode::TwoBehind => "twobehind",
     }
 }
 

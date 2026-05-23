@@ -5,7 +5,7 @@ pub mod events;
 pub mod profile;
 pub mod runtime;
 
-pub const SSBUSYNC_STATUS_SYMBOL: &[u8] = b"ssbusync_status\0";
+pub const SSBUSYNC_INITIALIZED_SYMBOL: &[u8] = b"ssbusync_initialized\0";
 pub const SSBUSYNC_ENV_GET_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_get_flags\0";
 pub const SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_replace_flags\0";
 pub const SSBUSYNC_ENV_SET_FLAG_SYMBOL: &[u8] = b"ssbusync_env_set_flag\0";
@@ -137,6 +137,26 @@ impl EnvironmentFlags {
             Self(self.0 | mask)
         } else {
             Self(self.0 & !mask)
+        }
+    }
+
+    #[inline]
+    pub const fn extract_value(self, mask: u32) -> u32 {
+        if mask == 0 {
+            0
+        } else {
+            (self.bits() & mask) >> mask.trailing_zeros()
+        }
+    }
+
+    #[inline]
+    pub const fn with_value(self, mask: u32, value: u32) -> Self {
+        if mask == 0 {
+            self
+        } else {
+            let shift = mask.trailing_zeros();
+            let field = (value << shift) & mask;
+            Self::new((self.bits() & !mask) | field)
         }
     }
 }
@@ -420,7 +440,7 @@ fn call_copy_f32_slice(symbol: &'static [u8], out: &mut [f32]) -> Option<usize> 
 /// }
 /// ```
 pub fn remote_present() -> bool {
-    lookup_symbol_addr(SSBUSYNC_STATUS_SYMBOL).is_some()
+    lookup_symbol_addr(SSBUSYNC_INITIALIZED_SYMBOL).is_some()
 }
 
 /// Reads the remote ssbusync status.
@@ -428,11 +448,11 @@ pub fn remote_present() -> bool {
 /// # Example
 /// ```ignore
 /// if let Some(status) = ultelier::sync_guest::status() {
-///     skyline::println!("ssbusync status = {status:#x}");
+///     skyline::println!("ssbusync initialized = {status}");
 /// }
 /// ```
-pub fn status() -> Option<u32> {
-    call_u32(SSBUSYNC_STATUS_SYMBOL)
+pub fn initialized() -> Option<bool> {
+    call_u32(SSBUSYNC_INITIALIZED_SYMBOL).map(|value| value != 0)
 }
 
 /// Requests that the remote plugin install and initialize with the supplied

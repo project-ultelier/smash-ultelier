@@ -87,19 +87,19 @@ That keeps the runtime in the correct mode for later triple/double transitions.
 Event subscription example:
 
 ```rust
-use ultelier::sync_guest::{self as sync, events, BufferMode, IndexBackend};
+use ultelier::sync_guest::{self as sync, events, BufferMode, IndexMode};
 
 extern "C" fn on_buffer_mode_changed(mode: BufferMode) {
     skyline::println!("buffer mode changed to {:?}", mode);
 }
 
-extern "C" fn on_index_backend_changed(mode: IndexBackend) {
-    skyline::println!("index backend changed to {:?}", mode);
+extern "C" fn on_index_mode_changed(mode: IndexMode) {
+    skyline::println!("index mode changed to {:?}", mode);
 }
 
 pub fn subscribe_to_sync_callbacks() -> bool {
     events::set_typed_buffer_mode_changed(on_buffer_mode_changed)
-        && events::set_typed_index_backend_changed(on_index_backend_changed)
+        && events::set_typed_index_mode_changed(on_index_mode_changed)
 }
 ```
 
@@ -107,7 +107,7 @@ To unsubscribe:
 
 ```rust
 let _ = ultelier::sync_guest::events::clear_typed_buffer_mode_changed();
-let _ = ultelier::sync_guest::events::clear_typed_index_backend_changed();
+let _ = ultelier::sync_guest::events::clear_typed_index_mode_changed();
 let _ = ultelier::sync_guest::events::clear_typed_vsync_changed();
 let _ = ultelier::sync_guest::events::clear_typed_render_opts_changed();
 ```

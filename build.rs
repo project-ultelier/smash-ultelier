@@ -1,9 +1,10 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-fn candidate_dirs(manifest_dir: &Path) -> [PathBuf; 3] {
+fn candidate_dirs(manifest_dir: &Path) -> [PathBuf; 4] {
     [
         manifest_dir.join("lib"),
+        manifest_dir.join("deps"),
         manifest_dir
             .join("..")
             .join("HDR_DEV")
@@ -27,7 +28,7 @@ fn emit_link_search(dir: &Path) {
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing manifest dir"));
-    if env::var_os("CARGO_FEATURE_PLUGIN").is_none() {
+    if env::var_os("CARGO_FEATURE_CONSOLE").is_none() {
         return;
     }
 
