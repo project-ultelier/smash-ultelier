@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "ultelier"
-version = "0.1.0"
+version = "1.0.0-beta.1"
 edition = "2021"
 
 [package.metadata.skyline]
@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["sync-guest"]
 no-dep = ["sync-guest"]
 plugin = ["no-dep", "console"]
-console = ["dep:imgui-api", "dep:nsuite"]
+console = ["dep:imgui-api", "dep:nsuite", "sync-guest"]
 auto-profile-switcher = ["sync-guest"]
 sync-guest = ["dep:ssbusync_guest"]
 

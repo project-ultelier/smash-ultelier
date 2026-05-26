@@ -13,55 +13,58 @@ Import `ultelier` as a library:
 
 ```toml
 [dependencies]
-ultelier = { git = "https://github.com/BlankMauser/smash-ultelier.git", branch = "clean", default-features = false, features = ["sync-guest"] }
+ultelier = { git = "https://github.com/BlankMauser/smash-ultelier.git", default-features = false, features = ["sync-guest"] }
+```
+Then make sure to install it in your main function.
+
+```rust
+#[skyline::main(name = "my-plugin")]
+pub fn main() {
+    let mut config = SsbuSyncConfig::vanilla();
+    config.overclocker = true;
+    ultelier::sync_guest::install(config);
+}
 ```
 
 Then use the re-exported guest API:
 
 ```rust
-use ultelier::sync_guest::{self as sync, BufferMode, IndexBackend};
+use ultelier::sync_guest::{self as sync, BufferMode, IndexMode};
 
-pub fn enable_dynamic_triple_buffer() {
-    let _ = sync::set_index_backend(IndexBackend::Dynamic);
-    let _ = sync::set_buffer_mode(BufferMode::Triple);
+pub fn enable_less_lag() {
+    let _ = sync::set_buffer_mode(BufferMode::Double);
+    let _ = sync::set_index_mode(IndexMode::OneBehind);
 }
 ```
 
-## Runtime double/triple switching
+## Runtime buffer and index switching
 
 This is the main reason to use the library.
 
-Use `set_buffer_mode(...)` to switch between 3 delay and 4 delay (better performance).
-Currently going back to default delay is buggy and not supported. It is unlikely I make
-a fix for that personally.
-
-Recommended startup from a guest plugin:
-
-```rust
-use ultelier::sync_guest::{self as sync, BufferMode, IndexBackend};
-
-pub fn initialize_sync_control() {
-    let _ = sync::set_index_backend(IndexBackend::Dynamic);
-    let _ = sync::set_buffer_mode(BufferMode::Triple);
-}
-```
-
-IndexBackend has to be Dynamic and triple buffer must start on. Otherwise you will not
-have the memory allocated to switch between triple/double buffers.
+Use `set_buffer_mode(...)` to switch between double buffer (less delay) and triple buffer (better performance). Vanilla is triple buffered.
+Use `set_index_mode(...)` to switch between frame index modes. Vanilla is 2 frames behind. Set to 1 frame behind for less delay. Immediate mode (0 frames behind) is performance intensive and only emulators can run it, but you can shave off another frame of delay.
+Use `set_vsync_enabled(...)` to toggle vsync. (disabled = less delay)
+Use `set_render_opts_enabled(...)` to optimize smashed render and input polling loop (enabled = less delay). It is recommended to always enable this when changing buffer/index mode to something other than vanilla.
 
 Basic toggle example:
 
 ```rust
-use ultelier::sync_guest::{self as sync, BufferMode};
+use ultelier::sync_guest::{self as sync, BufferMode, IndexMode};
 
 pub fn set_low_latency_mode(enabled: bool) {
-    let target = if enabled {
-        BufferMode::Double
-    } else {
-        BufferMode::Triple
+    let buffer_target = match enabled {
+        true => BufferMode::Double,
+        false => BufferMode::Triple,
+    };
+    let index_target = match enabled {
+        true => IndexMode::OneBehind, // use IndexMode::Immediate on emulators
+        false => BufferMode::TwoBehind,
     };
 
-    let _ = sync::set_buffer_mode(target);
+    let _ = sync::set_vsync_enabled(!enabled);
+    let _ = sync::set_render_opts_enabled(enabled);
+    let _ = sync::set_buffer_mode(buffer_target);
+    let _ = sync::set_index_mode(index_target);
 }
 ```
 
@@ -84,19 +87,19 @@ That keeps the runtime in the correct mode for later triple/double transitions.
 Event subscription example:
 
 ```rust
-use ultelier::sync_guest::{self as sync, events, BufferMode, IndexBackend};
+use ultelier::sync_guest::{self as sync, events, BufferMode, IndexMode};
 
 extern "C" fn on_buffer_mode_changed(mode: BufferMode) {
     skyline::println!("buffer mode changed to {:?}", mode);
 }
 
-extern "C" fn on_index_backend_changed(mode: IndexBackend) {
-    skyline::println!("index backend changed to {:?}", mode);
+extern "C" fn on_index_mode_changed(mode: IndexMode) {
+    skyline::println!("index mode changed to {:?}", mode);
 }
 
 pub fn subscribe_to_sync_callbacks() -> bool {
     events::set_typed_buffer_mode_changed(on_buffer_mode_changed)
-        && events::set_typed_index_backend_changed(on_index_backend_changed)
+        && events::set_typed_index_mode_changed(on_index_mode_changed)
 }
 ```
 
@@ -104,6 +107,51 @@ To unsubscribe:
 
 ```rust
 let _ = ultelier::sync_guest::events::clear_typed_buffer_mode_changed();
-let _ = ultelier::sync_guest::events::clear_typed_index_backend_changed();
+let _ = ultelier::sync_guest::events::clear_typed_index_mode_changed();
 let _ = ultelier::sync_guest::events::clear_typed_vsync_changed();
+let _ = ultelier::sync_guest::events::clear_typed_render_opts_changed();
+```
+
+## Resolution API
+
+`sync_guest` also exposes helpers for default and runtime resolution control.
+
+Default game resolution configuration:
+
+- `set_default_game_resolution_level(level)` sets the baseline internal render level.
+- `default_game_resolution_level()` reads the configured baseline as `Option<ResolutionLevel>`.
+- `default_game_resolution()` reads the concrete `Resolution { width, height }` for the baseline.
+
+Dynamic resolution control:
+
+- `set_dynamic_resolution_enabled(enabled)` turns dynamic resolution on/off in the runtime.
+- `dynamic_resolution_enabled()` reads whether dynamic resolution is currently enabled.
+- `current_game_resolution()` reads the currently applied resolutions. If dynamic resolution is off, this returns the default resolution. Otherwise returns the currently applied dynamic resolution.
+- `apparent_game_resolution()` reads the actual/effective resolution of the last presented frame.
+- `push_dynamic_res_report(level)` requests a temporary dynamic-res level.
+- `pop_dynamic_res_report(level)` removes one matching dynamic-res request.
+- `clear_all_dynamic_res_report()` clears all pushed dynamic-res requests.
+
+Example:
+
+```rust
+use ultelier::sync_guest::{self as sync, ResolutionLevel};
+
+pub fn on_game_start() {
+    let _ = sync::set_dynamic_resolution_enabled(true);
+    let _ = sync::set_default_game_resolution_level(ResolutionLevel::Res1280x720);
+}
+
+pub fn on_game_frame() {
+    if intensive_effect_started() {
+        let _ = sync::push_dynamic_res_report(ResolutionLevel::Res1280x720);
+    } else if intensive_effect_ended() {
+        let _ = sync::pop_dynamic_res_report(ResolutionLevel::Res1280x720);
+    }
+}
+
+pub fn on_game_end() {
+    let _ = sync::set_dynamic_resolution_enabled(false);
+    let _ = sync:clear_all_dynamic_res_report();
+}
 ```
