@@ -13,7 +13,7 @@ Import `ultelier` as a library:
 
 ```toml
 [dependencies]
-ultelier = { git = "https://github.com/BlankMauser/smash-ultelier.git", default-features = false, features = ["sync-guest"] }
+ultelier = { git = "https://github.com/project-ultelier/smash-ultelier.git", default-features = false, features = ["sync-guest"] }
 ```
 Then make sure to install it in your main function.
 
