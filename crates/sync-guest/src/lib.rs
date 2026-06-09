@@ -1,3 +1,4 @@
+use core::sync::atomic::{AtomicUsize, Ordering};
 use skyline::nn::ro;
 
 pub mod callback;
@@ -65,6 +66,50 @@ pub const SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL: &[u8] = b"ssbusync_get_smooth
 pub const SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL: &[u8] =
     b"ssbusync_get_frametime_history_capacity\0";
 pub const SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL: &[u8] = b"ssbusync_copy_frametime_history\0";
+
+static SSBUSYNC_INITIALIZED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_ENV_GET_FLAGS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_ENV_REPLACE_FLAGS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_ENV_SET_FLAG_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_VANILLA_RUNTIME_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_IS_VANILLA_RUNTIME_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_VSYNC_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_VSYNC_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_RENDER_OPTS_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_RENDER_OPTS_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_PACER_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_PACER_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_TRIPLE_BUFFER_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_BUFFER_MODE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_BUFFER_MODE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_INDEX_MODE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_INDEX_MODE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_INSTALL_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_DYNAMIC_RESOLUTION_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_POP_DYNAMIC_RES_REPORT_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_OVERCLOCK_PROFILE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_NSTUFF_STATUS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_INSTANT_FPS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_SMOOTH_FPS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_INSTANT_FRAMETIME_MS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_COPY_FRAMETIME_HISTORY_CACHE: AtomicUsize = AtomicUsize::new(0);
 
 /// Raw callback signature used by the remote ssbusync event registration API.
 pub type StateCallback = extern "C" fn(u32);
@@ -270,13 +315,14 @@ pub enum OverclockProfile {
     Rest = 3,
 }
 
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ResolutionLevel {
     Res1920x1080 = 0,
     Res1600x900 = 1,
     Res1280x720 = 2,
     Res1024x576 = 3,
+    Res854x480 = 4,
 }
 
 impl ResolutionLevel {
@@ -286,8 +332,22 @@ impl ResolutionLevel {
             1 => Some(Self::Res1600x900),
             2 => Some(Self::Res1280x720),
             3 => Some(Self::Res1024x576),
+            4 => Some(Self::Res854x480),
             _ => None,
         }
+    }
+    pub fn to_values(&self) -> (u32, u32) {
+        match self {
+            ResolutionLevel::Res1920x1080 => (1920, 1080),
+            ResolutionLevel::Res1600x900 => (1600, 900),
+            ResolutionLevel::Res1280x720 => (1280, 720),
+            ResolutionLevel::Res1024x576 => (1024, 576),
+            ResolutionLevel::Res854x480 => (854, 480),
+        }
+    }
+    pub fn to_resolution(&self) -> Resolution {
+        let (width, height) = self.to_values();
+        Resolution { width, height }
     }
 }
 
@@ -345,10 +405,16 @@ impl OverclockProfile {
     }
 }
 
-fn lookup_symbol_addr(symbol: &'static [u8]) -> Option<usize> {
+fn lookup_symbol_addr(symbol: &'static [u8], cache: &AtomicUsize) -> Option<usize> {
+    match cache.load(Ordering::Acquire) {
+        0 => {}
+        cached => return Some(cached),
+    }
+
     let mut addr = 0usize;
     unsafe {
         if ro::LookupSymbol(&mut addr, symbol.as_ptr()) == 0 && addr != 0 {
+            cache.store(addr, Ordering::Release);
             Some(addr)
         } else {
             None
@@ -356,64 +422,73 @@ fn lookup_symbol_addr(symbol: &'static [u8]) -> Option<usize> {
     }
 }
 
-fn call_u32(symbol: &'static [u8]) -> Option<u32> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_u32(symbol: &'static [u8], cache: &AtomicUsize) -> Option<u32> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn() -> u32 = unsafe { core::mem::transmute(addr) };
     Some(func())
 }
 
-fn call_u64(symbol: &'static [u8]) -> Option<u64> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_u64(symbol: &'static [u8], cache: &AtomicUsize) -> Option<u64> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn() -> u64 = unsafe { core::mem::transmute(addr) };
     Some(func())
 }
 
-fn call_f64(symbol: &'static [u8]) -> Option<f64> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_f64(symbol: &'static [u8], cache: &AtomicUsize) -> Option<f64> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn() -> f64 = unsafe { core::mem::transmute(addr) };
     Some(func())
 }
 
-fn call_usize(symbol: &'static [u8]) -> Option<usize> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_usize(symbol: &'static [u8], cache: &AtomicUsize) -> Option<usize> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn() -> usize = unsafe { core::mem::transmute(addr) };
     Some(func())
 }
 
-fn call_u32_u32(symbol: &'static [u8], value: u32) -> Option<u32> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_u32_u32(symbol: &'static [u8], value: u32, cache: &AtomicUsize) -> Option<u32> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(u32) -> u32 = unsafe { core::mem::transmute(addr) };
     Some(func(value))
 }
 
-fn call_u32_u32_u32(symbol: &'static [u8], first: u32, second: u32) -> Option<u32> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_u32_u32_u32(
+    symbol: &'static [u8],
+    first: u32,
+    second: u32,
+    cache: &AtomicUsize,
+) -> Option<u32> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(u32, u32) -> u32 = unsafe { core::mem::transmute(addr) };
     Some(func(first, second))
 }
 
-fn call_struct<T: Copy>(symbol: &'static [u8], value: T) -> Option<()> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_struct<T: Copy>(symbol: &'static [u8], value: T, cache: &AtomicUsize) -> Option<()> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(T) = unsafe { core::mem::transmute(addr) };
     func(value);
     Some(())
 }
 
-fn call_void(symbol: &'static [u8]) -> Option<()> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_void(symbol: &'static [u8], cache: &AtomicUsize) -> Option<()> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn() = unsafe { core::mem::transmute(addr) };
     func();
     Some(())
 }
 
-fn call_callback_reg(symbol: &'static [u8], callback: Option<StateCallback>) -> Option<u32> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_callback_reg(
+    symbol: &'static [u8],
+    callback: Option<StateCallback>,
+    cache: &AtomicUsize,
+) -> Option<u32> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(Option<StateCallback>) -> u32 = unsafe { core::mem::transmute(addr) };
     Some(func(callback))
 }
 
-fn call_fill_struct<T: Default>(symbol: &'static [u8]) -> Option<T> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_fill_struct<T: Default>(symbol: &'static [u8], cache: &AtomicUsize) -> Option<T> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(*mut T) -> u32 = unsafe { core::mem::transmute(addr) };
     let mut value = T::default();
     if func(&mut value as *mut T) != 0 {
@@ -423,8 +498,12 @@ fn call_fill_struct<T: Default>(symbol: &'static [u8]) -> Option<T> {
     }
 }
 
-fn call_copy_f32_slice(symbol: &'static [u8], out: &mut [f32]) -> Option<usize> {
-    let addr = lookup_symbol_addr(symbol)?;
+fn call_copy_f32_slice(
+    symbol: &'static [u8],
+    out: &mut [f32],
+    cache: &AtomicUsize,
+) -> Option<usize> {
+    let addr = lookup_symbol_addr(symbol, cache)?;
     let func: extern "C" fn(*mut f32, usize) -> usize = unsafe { core::mem::transmute(addr) };
     Some(func(out.as_mut_ptr(), out.len()))
 }
@@ -440,7 +519,7 @@ fn call_copy_f32_slice(symbol: &'static [u8], out: &mut [f32]) -> Option<usize> 
 /// }
 /// ```
 pub fn remote_present() -> bool {
-    lookup_symbol_addr(SSBUSYNC_INITIALIZED_SYMBOL).is_some()
+    lookup_symbol_addr(SSBUSYNC_INITIALIZED_SYMBOL, &SSBUSYNC_INITIALIZED_CACHE).is_some()
 }
 
 /// Reads the remote ssbusync status.
@@ -452,7 +531,7 @@ pub fn remote_present() -> bool {
 /// }
 /// ```
 pub fn initialized() -> Option<bool> {
-    call_u32(SSBUSYNC_INITIALIZED_SYMBOL).map(|value| value != 0)
+    call_u32(SSBUSYNC_INITIALIZED_SYMBOL, &SSBUSYNC_INITIALIZED_CACHE).map(|value| value != 0)
 }
 
 /// Requests that the remote plugin install and initialize with the supplied
@@ -460,7 +539,7 @@ pub fn initialized() -> Option<bool> {
 ///
 /// Returns `None` when the install symbol is unavailable.
 pub fn install(config: SsbuSyncConfig) -> Option<()> {
-    call_struct(SSBUSYNC_INSTALL_SYMBOL, config)
+    call_struct(SSBUSYNC_INSTALL_SYMBOL, config, &SSBUSYNC_INSTALL_CACHE)
 }
 
 /// Enables or disables dynamic resolution in the remote runtime.
@@ -468,13 +547,18 @@ pub fn set_dynamic_resolution_enabled(enabled: bool) -> Option<bool> {
     call_u32_u32(
         SSBUSYNC_SET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL,
         u32::from(enabled),
+        &SSBUSYNC_SET_DYNAMIC_RESOLUTION_ENABLED_CACHE,
     )
     .map(|value| value != 0)
 }
 
 /// Reads whether dynamic resolution is enabled in the remote runtime.
 pub fn dynamic_resolution_enabled() -> Option<bool> {
-    call_u32(SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_DYNAMIC_RESOLUTION_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Sets the default game resolution level used by the remote runtime.
@@ -482,68 +566,111 @@ pub fn set_default_game_resolution_level(level: ResolutionLevel) -> Option<bool>
     call_u32_u32(
         SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL,
         level as u32,
+        &SSBUSYNC_SET_DEFAULT_GAME_RESOLUTION_LEVEL_CACHE,
     )
     .map(|value| value != 0)
 }
 
 /// Reads the default game resolution level in the remote runtime.
 pub fn default_game_resolution_level() -> Option<Option<ResolutionLevel>> {
-    call_u32(SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL).map(ResolutionLevel::from_u32)
+    call_u32(
+        SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_SYMBOL,
+        &SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_LEVEL_CACHE,
+    )
+    .map(ResolutionLevel::from_u32)
 }
 
 /// Reads the default game resolution in the remote runtime.
 pub fn default_game_resolution() -> Option<Resolution> {
-    call_fill_struct(SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_SYMBOL)
+    call_fill_struct(
+        SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_SYMBOL,
+        &SSBUSYNC_GET_DEFAULT_GAME_RESOLUTION_CACHE,
+    )
 }
 
 /// Reads the current game resolution in the remote runtime.
 pub fn current_game_resolution() -> Option<Resolution> {
-    call_fill_struct(SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_SYMBOL)
+    call_fill_struct(
+        SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_SYMBOL,
+        &SSBUSYNC_GET_CURRENT_GAME_RESOLUTION_CACHE,
+    )
 }
 
 /// Reads the apparent game resolution in the remote runtime.
 pub fn apparent_game_resolution() -> Option<Resolution> {
-    call_fill_struct(SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_SYMBOL)
+    call_fill_struct(
+        SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_SYMBOL,
+        &SSBUSYNC_GET_APPARENT_GAME_RESOLUTION_CACHE,
+    )
 }
 
 /// Pushes a dynamic-resolution report level into the remote runtime.
 pub fn push_dynamic_res_report(level: ResolutionLevel) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_SYMBOL, level as u32).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_SYMBOL,
+        level as u32,
+        &SSBUSYNC_PUSH_DYNAMIC_RES_REPORT_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Removes one dynamic-resolution report level from the remote runtime.
 pub fn pop_dynamic_res_report(level: ResolutionLevel) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_POP_DYNAMIC_RES_REPORT_SYMBOL, level as u32).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_POP_DYNAMIC_RES_REPORT_SYMBOL,
+        level as u32,
+        &SSBUSYNC_POP_DYNAMIC_RES_REPORT_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Clears all dynamic-resolution reports from the remote runtime.
 pub fn clear_all_dynamic_res_report() -> Option<bool> {
-    call_u32(SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_SYMBOL,
+        &SSBUSYNC_CLEAR_ALL_DYNAMIC_RES_REPORT_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads the instantaneous FPS estimate reported by the remote runtime.
 pub fn instant_fps() -> Option<u64> {
-    call_u64(SSBUSYNC_GET_INSTANT_FPS_SYMBOL)
+    call_u64(
+        SSBUSYNC_GET_INSTANT_FPS_SYMBOL,
+        &SSBUSYNC_GET_INSTANT_FPS_CACHE,
+    )
 }
 
 /// Reads the smoothed FPS estimate reported by the remote runtime.
 pub fn smooth_fps() -> Option<u64> {
-    call_u64(SSBUSYNC_GET_SMOOTH_FPS_SYMBOL)
+    call_u64(
+        SSBUSYNC_GET_SMOOTH_FPS_SYMBOL,
+        &SSBUSYNC_GET_SMOOTH_FPS_CACHE,
+    )
 }
 
 /// Reads the instantaneous frametime in milliseconds reported by the remote runtime.
 pub fn instant_frametime_ms() -> Option<f64> {
-    call_f64(SSBUSYNC_GET_INSTANT_FRAMETIME_MS_SYMBOL)
+    call_f64(
+        SSBUSYNC_GET_INSTANT_FRAMETIME_MS_SYMBOL,
+        &SSBUSYNC_GET_INSTANT_FRAMETIME_MS_CACHE,
+    )
 }
 
 /// Reads the smoothed frametime in milliseconds reported by the remote runtime.
 pub fn smooth_frametime_ms() -> Option<f64> {
-    call_f64(SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL)
+    call_f64(
+        SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL,
+        &SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_CACHE,
+    )
 }
 
 /// Returns the remote frametime-history ring capacity.
 pub fn frametime_history_capacity() -> Option<usize> {
-    call_usize(SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL)
+    call_usize(
+        SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL,
+        &SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_CACHE,
+    )
 }
 
 /// Copies recent frametime samples into `out` and returns the copied sample count.
@@ -551,7 +678,11 @@ pub fn copy_frametime_history(out: &mut [f32]) -> Option<usize> {
     if out.is_empty() {
         return Some(0);
     }
-    call_copy_f32_slice(SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL, out)
+    call_copy_f32_slice(
+        SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL,
+        out,
+        &SSBUSYNC_COPY_FRAMETIME_HISTORY_CACHE,
+    )
 }
 
 /// Fetches the current environment flags for ssbusync.
@@ -567,7 +698,8 @@ pub fn copy_frametime_history(out: &mut [f32]) -> Option<usize> {
 /// }
 /// ```
 pub fn env_flags() -> Option<EnvironmentFlags> {
-    call_u32(SSBUSYNC_ENV_GET_FLAGS_SYMBOL).map(EnvironmentFlags::new)
+    call_u32(SSBUSYNC_ENV_GET_FLAGS_SYMBOL, &SSBUSYNC_ENV_GET_FLAGS_CACHE)
+        .map(EnvironmentFlags::new)
 }
 
 /// Replaces the full environment flags and returns it.
@@ -585,7 +717,12 @@ pub fn env_flags() -> Option<EnvironmentFlags> {
 /// let previous = ultelier::sync_guest::replace_env_flags(desired);
 /// ```
 pub fn replace_env_flags(flags: EnvironmentFlags) -> Option<EnvironmentFlags> {
-    call_u32_u32(SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL, flags.bits()).map(EnvironmentFlags::new)
+    call_u32_u32(
+        SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL,
+        flags.bits(),
+        &SSBUSYNC_ENV_REPLACE_FLAGS_CACHE,
+    )
+    .map(EnvironmentFlags::new)
 }
 
 /// Toggles a single environment flag bit and returns the updated flag set.
@@ -597,8 +734,13 @@ pub fn replace_env_flags(flags: EnvironmentFlags) -> Option<EnvironmentFlags> {
 /// let updated = ultelier::sync_guest::set_env_flag(EnvironmentFlags::TRIPLE_ENABLED, true);
 /// ```
 pub fn set_env_flag(mask: u32, enabled: bool) -> Option<EnvironmentFlags> {
-    call_u32_u32_u32(SSBUSYNC_ENV_SET_FLAG_SYMBOL, mask, u32::from(enabled))
-        .map(EnvironmentFlags::new)
+    call_u32_u32_u32(
+        SSBUSYNC_ENV_SET_FLAG_SYMBOL,
+        mask,
+        u32::from(enabled),
+        &SSBUSYNC_ENV_SET_FLAG_CACHE,
+    )
+    .map(EnvironmentFlags::new)
 }
 
 /// Convenience functions to disable all optimizations and set the runtime to vanilla
@@ -608,12 +750,20 @@ pub fn set_env_flag(mask: u32, enabled: bool) -> Option<EnvironmentFlags> {
 /// let applied = ultelier::sync_guest::set_vanilla_runtime();
 /// ```
 pub fn set_vanilla_runtime() -> Option<bool> {
-    call_u32(SSBUSYNC_SET_VANILLA_RUNTIME_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_SET_VANILLA_RUNTIME_SYMBOL,
+        &SSBUSYNC_SET_VANILLA_RUNTIME_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads whether the runtime is vanilla or not.
 pub fn is_vanilla_runtime() -> Option<bool> {
-    call_u32(SSBUSYNC_IS_VANILLA_RUNTIME_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_IS_VANILLA_RUNTIME_SYMBOL,
+        &SSBUSYNC_IS_VANILLA_RUNTIME_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Enables or disables vsync in the remote runtime.
@@ -623,12 +773,21 @@ pub fn is_vanilla_runtime() -> Option<bool> {
 /// let applied = ultelier::sync_guest::set_vsync_enabled(false);
 /// ```
 pub fn set_vsync_enabled(enabled: bool) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL, u32::from(enabled)).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL,
+        u32::from(enabled),
+        &SSBUSYNC_SET_VSYNC_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads whether vsync is enabled in the remote runtime.
 pub fn vsync_enabled() -> Option<bool> {
-    call_u32(SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_VSYNC_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Enables or disables render-opts in the remote runtime.
@@ -638,13 +797,21 @@ pub fn vsync_enabled() -> Option<bool> {
 /// let applied = ultelier::sync_guest::set_render_opts_enabled(true);
 /// ```
 pub fn set_render_opts_enabled(enabled: bool) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL, u32::from(enabled))
-        .map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL,
+        u32::from(enabled),
+        &SSBUSYNC_SET_RENDER_OPTS_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads whether render-opts are enabled in the remote runtime.
 pub fn render_opts_enabled() -> Option<bool> {
-    call_u32(SSBUSYNC_GET_RENDER_OPTS_ENABLED_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_GET_RENDER_OPTS_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_RENDER_OPTS_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Enables or disables the pacer in the remote runtime.
@@ -654,12 +821,21 @@ pub fn render_opts_enabled() -> Option<bool> {
 /// let applied = ultelier::sync_guest::set_pacer_enabled(true);
 /// ```
 pub fn set_pacer_enabled(enabled: bool) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_PACER_ENABLED_SYMBOL, u32::from(enabled)).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_PACER_ENABLED_SYMBOL,
+        u32::from(enabled),
+        &SSBUSYNC_SET_PACER_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads whether the pacer is enabled in the remote runtime.
 pub fn pacer_enabled() -> Option<bool> {
-    call_u32(SSBUSYNC_GET_PACER_ENABLED_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_GET_PACER_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_PACER_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Convenience wrapper for switching between the live double- and triple-buffer
@@ -681,13 +857,18 @@ pub fn set_triple_buffer_enabled(enabled: bool) -> Option<bool> {
     call_u32_u32(
         SSBUSYNC_SET_TRIPLE_BUFFER_ENABLED_SYMBOL,
         u32::from(enabled),
+        &SSBUSYNC_SET_TRIPLE_BUFFER_ENABLED_CACHE,
     )
     .map(|value| value != 0)
 }
 
 /// Reads whether triple buffering is enabled in the remote runtime.
 pub fn triple_buffer_enabled() -> Option<bool> {
-    call_u32(SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_TRIPLE_BUFFER_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Requests a live buffer-ring transition to double or triple buffering.
@@ -730,12 +911,21 @@ pub fn triple_buffer_enabled() -> Option<bool> {
 /// controller.apply(BufferMode::Triple);
 /// ```
 pub fn set_buffer_mode(mode: BufferMode) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_BUFFER_MODE_SYMBOL, mode as u32).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_BUFFER_MODE_SYMBOL,
+        mode as u32,
+        &SSBUSYNC_SET_BUFFER_MODE_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads the current remote buffer mode.
 pub fn buffer_mode() -> Option<Option<BufferMode>> {
-    call_u32(SSBUSYNC_GET_BUFFER_MODE_SYMBOL).map(BufferMode::from_u32)
+    call_u32(
+        SSBUSYNC_GET_BUFFER_MODE_SYMBOL,
+        &SSBUSYNC_GET_BUFFER_MODE_CACHE,
+    )
+    .map(BufferMode::from_u32)
 }
 
 /// Overrides the frame-index policy used by ssbusync.
@@ -752,12 +942,21 @@ pub fn buffer_mode() -> Option<Option<BufferMode>> {
 /// only forward changes across the symbol boundary.
 #[doc(hidden)]
 pub fn set_index_mode(mode: IndexMode) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_INDEX_MODE_SYMBOL, mode as u32).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_INDEX_MODE_SYMBOL,
+        mode as u32,
+        &SSBUSYNC_SET_INDEX_MODE_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads the current remote index mode.
 pub fn index_mode() -> Option<Option<IndexMode>> {
-    call_u32(SSBUSYNC_GET_INDEX_MODE_SYMBOL).map(IndexMode::from_u32)
+    call_u32(
+        SSBUSYNC_GET_INDEX_MODE_SYMBOL,
+        &SSBUSYNC_GET_INDEX_MODE_CACHE,
+    )
+    .map(IndexMode::from_u32)
 }
 
 /// Requests a specific remote overclock profile.
@@ -769,7 +968,12 @@ pub fn index_mode() -> Option<Option<IndexMode>> {
 /// let applied = ultelier::sync_guest::set_overclock_profile(OverclockProfile::PerformanceSingles);
 /// ```
 pub fn set_overclock_profile(profile: OverclockProfile) -> Option<bool> {
-    call_u32_u32(SSBUSYNC_SET_OVERCLOCK_PROFILE_SYMBOL, profile as u32).map(|value| value != 0)
+    call_u32_u32(
+        SSBUSYNC_SET_OVERCLOCK_PROFILE_SYMBOL,
+        profile as u32,
+        &SSBUSYNC_SET_OVERCLOCK_PROFILE_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Reads the currently selected overclock profile from the remote runtime.
@@ -786,8 +990,11 @@ pub fn set_overclock_profile(profile: OverclockProfile) -> Option<bool> {
 /// }
 /// ```
 pub fn current_overclock_profile() -> Option<Option<OverclockProfile>> {
-    call_u32(SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL)
-        .map(|value| OverclockProfile::from_u32(value))
+    call_u32(
+        SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL,
+        &SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_CACHE,
+    )
+    .map(|value| OverclockProfile::from_u32(value))
 }
 
 /// Returns whether the remote runtime is currently constrained to safe
@@ -800,7 +1007,11 @@ pub fn current_overclock_profile() -> Option<Option<OverclockProfile>> {
 /// }
 /// ```
 pub fn overclock_uses_safe_profiles() -> Option<bool> {
-    call_u32(SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_SYMBOL).map(|value| value != 0)
+    call_u32(
+        SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_SYMBOL,
+        &SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Fetches the current NsTuff status block from the remote runtime.
@@ -817,7 +1028,10 @@ pub fn overclock_uses_safe_profiles() -> Option<bool> {
 /// }
 /// ```
 pub fn current_nstuff_status() -> Option<NsTuffStatus> {
-    call_fill_struct(SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL)
+    call_fill_struct(
+        SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL,
+        &SSBUSYNC_GET_NSTUFF_STATUS_CACHE,
+    )
 }
 
 /// Registers a raw `u32` callback for remote vsync-change notifications.
@@ -833,7 +1047,12 @@ pub fn current_nstuff_status() -> Option<NsTuffStatus> {
 /// let registered = ultelier::sync_guest::set_vsync_changed_callback(Some(on_vsync_changed));
 /// ```
 pub fn set_vsync_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
-    call_callback_reg(SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_SYMBOL, callback).map(|value| value != 0)
+    call_callback_reg(
+        SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_SYMBOL,
+        callback,
+        &SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Clears the raw vsync-change callback.
@@ -859,8 +1078,12 @@ pub fn clear_vsync_changed_callback() -> Option<bool> {
 /// let registered = ultelier::sync_guest::set_render_opts_callback(Some(on_render_opts_changed));
 /// ```
 pub fn set_render_opts_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
-    call_callback_reg(SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_SYMBOL, callback)
-        .map(|value| value != 0)
+    call_callback_reg(
+        SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_SYMBOL,
+        callback,
+        &SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Clears the raw render optimization change callback.
@@ -887,8 +1110,12 @@ pub fn clear_render_opts_changed_callback() -> Option<bool> {
 ///     ultelier::sync_guest::set_buffer_mode_changed_callback(Some(on_buffer_mode_changed));
 /// ```
 pub fn set_buffer_mode_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
-    call_callback_reg(SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_SYMBOL, callback)
-        .map(|value| value != 0)
+    call_callback_reg(
+        SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_SYMBOL,
+        callback,
+        &SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Clears the raw buffer-mode callback.
@@ -914,8 +1141,12 @@ pub fn clear_buffer_mode_changed_callback() -> Option<bool> {
 ///     ultelier::sync_guest::set_index_mode_changed_callback(Some(on_index_mode_changed));
 /// ```
 pub fn set_index_mode_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
-    call_callback_reg(SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL, callback)
-        .map(|value| value != 0)
+    call_callback_reg(
+        SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_SYMBOL,
+        callback,
+        &SSBUSYNC_SET_INDEX_MODE_CHANGED_CALLBACK_CACHE,
+    )
+    .map(|value| value != 0)
 }
 
 /// Clears the raw index-mode callback.
