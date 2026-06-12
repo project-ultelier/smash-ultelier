@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "ultelier"
-version = "1.0.0-beta.1"
+version = "1.0.0"
 dependencies = [
  "imgui-api",
  "nsuite",
