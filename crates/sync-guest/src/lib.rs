@@ -12,6 +12,8 @@ pub const SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_replace_flag
 pub const SSBUSYNC_ENV_SET_FLAG_SYMBOL: &[u8] = b"ssbusync_env_set_flag\0";
 pub const SSBUSYNC_SET_VANILLA_RUNTIME_SYMBOL: &[u8] = b"ssbusync_set_vanilla_runtime\0";
 pub const SSBUSYNC_IS_VANILLA_RUNTIME_SYMBOL: &[u8] = b"ssbusync_is_vanilla_runtime\0";
+pub const SSBUSYNC_SET_FPS_BOOST_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_fps_boost_enabled\0";
+pub const SSBUSYNC_GET_FPS_BOOST_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_fps_boost_enabled\0";
 pub const SSBUSYNC_SET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_vsync_enabled\0";
 pub const SSBUSYNC_GET_VSYNC_ENABLED_SYMBOL: &[u8] = b"ssbusync_get_vsync_enabled\0";
 pub const SSBUSYNC_SET_RENDER_OPTS_ENABLED_SYMBOL: &[u8] = b"ssbusync_set_render_opts_enabled\0";
@@ -51,6 +53,8 @@ pub const SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_SYMBOL: &[u8] =
 pub const SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_SYMBOL: &[u8] =
     b"ssbusync_overclock_uses_safe_profiles\0";
 pub const SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL: &[u8] = b"ssbusync_get_nstuff_status\0";
+pub const SSBUSYNC_SET_FPS_BOOST_CHANGED_CALLBACK_SYMBOL: &[u8] =
+    b"ssbusync_set_fps_boost_changed_callback\0";
 pub const SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_SYMBOL: &[u8] =
     b"ssbusync_set_vsync_changed_callback\0";
 pub const SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_SYMBOL: &[u8] =
@@ -73,6 +77,8 @@ static SSBUSYNC_ENV_REPLACE_FLAGS_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_ENV_SET_FLAG_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_VANILLA_RUNTIME_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_IS_VANILLA_RUNTIME_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_FPS_BOOST_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_GET_FPS_BOOST_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_VSYNC_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_GET_VSYNC_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_RENDER_OPTS_ENABLED_CACHE: AtomicUsize = AtomicUsize::new(0);
@@ -100,6 +106,7 @@ static SSBUSYNC_SET_OVERCLOCK_PROFILE_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_CURRENT_OVERCLOCK_PROFILE_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_OVERCLOCK_USES_SAFE_PROFILES_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_GET_NSTUFF_STATUS_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_SET_FPS_BOOST_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_VSYNC_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_RENDER_OPTS_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_SET_BUFFER_MODE_CHANGED_CALLBACK_CACHE: AtomicUsize = AtomicUsize::new(0);
@@ -129,6 +136,7 @@ impl EnvironmentFlags {
     pub const PROFILING_ENABLED: u32 = 1 << 8;
     pub const SLOW_PACER_BIAS: u32 = 1 << 9;
     pub const OVERCLOCKER: u32 = 1 << 10;
+    pub const FPS_BOOST_ENABLED: u32 = 1 << 11;
 
     #[inline]
     pub const fn new(bits: u32) -> Self {
@@ -766,6 +774,25 @@ pub fn is_vanilla_runtime() -> Option<bool> {
     .map(|value| value != 0)
 }
 
+/// Enables or disables FPS boost in the remote runtime.
+pub fn set_fps_boost_enabled(enabled: bool) -> Option<bool> {
+    call_u32_u32(
+        SSBUSYNC_SET_FPS_BOOST_ENABLED_SYMBOL,
+        u32::from(enabled),
+        &SSBUSYNC_SET_FPS_BOOST_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
+}
+
+/// Reads whether FPS boost is enabled in the remote runtime.
+pub fn fps_boost_enabled() -> Option<bool> {
+    call_u32(
+        SSBUSYNC_GET_FPS_BOOST_ENABLED_SYMBOL,
+        &SSBUSYNC_GET_FPS_BOOST_ENABLED_CACHE,
+    )
+    .map(|value| value != 0)
+}
+
 /// Enables or disables vsync in the remote runtime.
 ///
 /// # Example
@@ -1032,6 +1059,23 @@ pub fn current_nstuff_status() -> Option<NsTuffStatus> {
         SSBUSYNC_GET_NSTUFF_STATUS_SYMBOL,
         &SSBUSYNC_GET_NSTUFF_STATUS_CACHE,
     )
+}
+
+/// Registers a raw `u32` callback for remote FPS boost change notifications.
+///
+/// Pass `None` to unregister the callback.
+pub fn set_fps_boost_changed_callback(callback: Option<StateCallback>) -> Option<bool> {
+    call_callback_reg(
+        SSBUSYNC_SET_FPS_BOOST_CHANGED_CALLBACK_SYMBOL,
+        callback,
+        &SSBUSYNC_SET_FPS_BOOST_CHANGED_CALLBACK_CACHE,
+    )
+    .map(|value| value != 0)
+}
+
+/// Clears the raw FPS boost callback.
+pub fn clear_fps_boost_changed_callback() -> Option<bool> {
+    set_fps_boost_changed_callback(None)
 }
 
 /// Registers a raw `u32` callback for remote vsync-change notifications.

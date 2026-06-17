@@ -3,10 +3,13 @@ use crate::{BufferMode, IndexMode, StateCallback};
 use std::sync::Mutex;
 
 pub type TypedVsyncCallback = extern "C" fn(bool);
+pub type TypedFpsBoostCallback = extern "C" fn(bool);
 pub type TypedRenderOptsCallback = extern "C" fn(bool);
 pub type TypedBufferModeCallback = extern "C" fn(BufferMode);
 pub type TypedIndexModeCallback = extern "C" fn(IndexMode);
 
+static TYPED_FPS_BOOST_CHANGED: Mutex<Callback<TypedFpsBoostCallback>> =
+    Mutex::new(Callback::new(None));
 static TYPED_VSYNC_CHANGED: Mutex<Callback<TypedVsyncCallback>> = Mutex::new(Callback::new(None));
 static TYPED_RENDER_OPTS_CHANGED: Mutex<Callback<TypedRenderOptsCallback>> =
     Mutex::new(Callback::new(None));
@@ -26,6 +29,13 @@ fn with_typed_callback<F, R>(
 extern "C" fn vsync_changed_typed_thunk(enabled: u32) {
     let enabled = enabled != 0;
     with_typed_callback(&TYPED_VSYNC_CHANGED, |callback| {
+        let _ = callback.invoke((enabled,));
+    });
+}
+
+extern "C" fn fps_boost_changed_typed_thunk(enabled: u32) {
+    let enabled = enabled != 0;
+    with_typed_callback(&TYPED_FPS_BOOST_CHANGED, |callback| {
         let _ = callback.invoke((enabled,));
     });
 }
@@ -62,10 +72,12 @@ pub enum SideEffectEvent {
     RenderOptsChanged = 1,
     BufferModeChanged = 2,
     IndexModeChanged = 3,
+    FpsBoostChanged = 4,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SideEffectRegistry {
+    pub fps_boost_changed: Callback<StateCallback>,
     pub vsync_changed: Callback<StateCallback>,
     pub render_opts_changed: Callback<StateCallback>,
     pub buffer_mode_changed: Callback<StateCallback>,
@@ -91,6 +103,9 @@ impl SideEffectRegistry {
     /// ```
     pub fn register_remote(&self) -> bool {
         let mut ok = true;
+        if self.fps_boost_changed.is_set() {
+            ok &= crate::set_fps_boost_changed_callback(self.fps_boost_changed.get()) == Some(true);
+        }
         if self.vsync_changed.is_set() {
             ok &= crate::set_vsync_changed_callback(self.vsync_changed.get()) == Some(true);
         }
@@ -116,11 +131,23 @@ impl SideEffectRegistry {
     /// let ok = ultelier::sync_guest::events::SideEffectRegistry::clear_remote();
     /// ```
     pub fn clear_remote() -> bool {
-        crate::clear_vsync_changed_callback() == Some(true)
+        crate::clear_fps_boost_changed_callback() == Some(true)
+            && crate::clear_vsync_changed_callback() == Some(true)
             && crate::clear_render_opts_changed_callback() == Some(true)
             && crate::clear_buffer_mode_changed_callback() == Some(true)
             && crate::clear_index_mode_changed_callback() == Some(true)
     }
+}
+
+/// Registers a raw FPS boost callback and returns whether registration
+/// succeeded.
+pub fn set_fps_boost_changed(callback: StateCallback) -> bool {
+    crate::set_fps_boost_changed_callback(Some(callback)) == Some(true)
+}
+
+/// Clears the raw FPS boost callback.
+pub fn clear_fps_boost_changed() -> bool {
+    crate::clear_fps_boost_changed_callback() == Some(true)
 }
 
 /// Registers a raw vsync-change callback and returns whether registration
@@ -220,6 +247,22 @@ pub fn set_index_mode_changed(callback: StateCallback) -> bool {
 /// ```
 pub fn clear_index_mode_changed() -> bool {
     crate::clear_index_mode_changed_callback() == Some(true)
+}
+
+/// Registers a typed `bool` callback for FPS boost changes.
+pub fn set_typed_fps_boost_changed(callback: TypedFpsBoostCallback) -> bool {
+    with_typed_callback(&TYPED_FPS_BOOST_CHANGED, |slot| {
+        let _ = slot.set(callback);
+    });
+    crate::set_fps_boost_changed_callback(Some(fps_boost_changed_typed_thunk)) == Some(true)
+}
+
+/// Clears the typed FPS boost callback.
+pub fn clear_typed_fps_boost_changed() -> bool {
+    with_typed_callback(&TYPED_FPS_BOOST_CHANGED, |slot| {
+        let _ = slot.clear();
+    });
+    crate::clear_fps_boost_changed_callback() == Some(true)
 }
 
 /// Registers a typed `bool` callback for vsync changes.
