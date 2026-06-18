@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "ssbusync-guest"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "skyline",
  "ultelier-macros",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "ultelier-macros"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
