@@ -6,7 +6,10 @@ pub mod events;
 pub mod profile;
 pub mod runtime;
 
+pub const SSBUSYNC_API_VERSION: u32 = 1;
+
 pub const SSBUSYNC_INITIALIZED_SYMBOL: &[u8] = b"ssbusync_initialized\0";
+pub const SSBUSYNC_API_VERSION_SYMBOL: &[u8] = b"ssbusync_api_version\0";
 pub const SSBUSYNC_ENV_GET_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_get_flags\0";
 pub const SSBUSYNC_ENV_REPLACE_FLAGS_SYMBOL: &[u8] = b"ssbusync_env_replace_flags\0";
 pub const SSBUSYNC_ENV_SET_FLAG_SYMBOL: &[u8] = b"ssbusync_env_set_flag\0";
@@ -70,8 +73,11 @@ pub const SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_SYMBOL: &[u8] = b"ssbusync_get_smooth
 pub const SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_SYMBOL: &[u8] =
     b"ssbusync_get_frametime_history_capacity\0";
 pub const SSBUSYNC_COPY_FRAMETIME_HISTORY_SYMBOL: &[u8] = b"ssbusync_copy_frametime_history\0";
+pub const SSBUSYNC_IS_ONLINE_NEXTENDO_REDIRECT_ACTIVE_SYMBOL: &[u8] =
+    b"ssbusync_is_online_nextendo_redirect_active\0";
 
 static SSBUSYNC_INITIALIZED_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_API_VERSION_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_ENV_GET_FLAGS_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_ENV_REPLACE_FLAGS_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_ENV_SET_FLAG_CACHE: AtomicUsize = AtomicUsize::new(0);
@@ -117,6 +123,7 @@ static SSBUSYNC_GET_INSTANT_FRAMETIME_MS_CACHE: AtomicUsize = AtomicUsize::new(0
 static SSBUSYNC_GET_SMOOTH_FRAMETIME_MS_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_GET_FRAMETIME_HISTORY_CAPACITY_CACHE: AtomicUsize = AtomicUsize::new(0);
 static SSBUSYNC_COPY_FRAMETIME_HISTORY_CACHE: AtomicUsize = AtomicUsize::new(0);
+static SSBUSYNC_IS_ONLINE_NEXTENDO_REDIRECT_ACTIVE_CACHE: AtomicUsize = AtomicUsize::new(0);
 
 /// Raw callback signature used by the remote ssbusync event registration API.
 pub type StateCallback = extern "C" fn(u32);
@@ -478,13 +485,6 @@ fn call_struct<T: Copy>(symbol: &'static [u8], value: T, cache: &AtomicUsize) ->
     Some(())
 }
 
-fn call_void(symbol: &'static [u8], cache: &AtomicUsize) -> Option<()> {
-    let addr = lookup_symbol_addr(symbol, cache)?;
-    let func: extern "C" fn() = unsafe { core::mem::transmute(addr) };
-    func();
-    Some(())
-}
-
 fn call_callback_reg(
     symbol: &'static [u8],
     callback: Option<StateCallback>,
@@ -534,7 +534,7 @@ pub fn remote_present() -> bool {
 ///
 /// # Example
 /// ```ignore
-/// if let Some(status) = ultelier::sync_guest::status() {
+/// if let Some(status) = ultelier::sync_guest::initialized() {
 ///     skyline::println!("ssbusync initialized = {status}");
 /// }
 /// ```
@@ -542,11 +542,29 @@ pub fn initialized() -> Option<bool> {
     call_u32(SSBUSYNC_INITIALIZED_SYMBOL, &SSBUSYNC_INITIALIZED_CACHE).map(|value| value != 0)
 }
 
+/// Reads the remote api version
+///
+/// # Example
+/// ```ignore
+/// if let Some(version) = ultelier::sync_guest::api_version() {
+///     skyline::println!("ssbusync version = {version}");
+/// }
+/// ```
+pub fn api_version() -> Option<u32> {
+    call_u32(SSBUSYNC_API_VERSION_SYMBOL, &SSBUSYNC_API_VERSION_CACHE)
+}
+
 /// Requests that the remote plugin install and initialize with the supplied
 /// config.
 ///
 /// Returns `None` when the install symbol is unavailable.
 pub fn install(config: SsbuSyncConfig) -> Option<()> {
+    if let Some(version) = api_version() {
+        assert_eq!(SSBUSYNC_API_VERSION, version);
+    } else {
+        panic!("[ssbusync] Unable to read remote api version");
+    }
+
     call_struct(SSBUSYNC_INSTALL_SYMBOL, config, &SSBUSYNC_INSTALL_CACHE)
 }
 
@@ -1201,4 +1219,18 @@ pub fn set_index_mode_changed_callback(callback: Option<StateCallback>) -> Optio
 /// ```
 pub fn clear_index_mode_changed_callback() -> Option<bool> {
     set_index_mode_changed_callback(None)
+}
+
+/// Returns true if Nextendo online redirect is active.
+///
+/// # Example
+/// ```ignore
+/// let is_active = ultelier::sync_guest::is_online_nextendo_redirect_active();
+/// ```
+pub fn is_online_nextendo_redirect_active() -> Option<bool> {
+    call_u32(
+        SSBUSYNC_IS_ONLINE_NEXTENDO_REDIRECT_ACTIVE_SYMBOL,
+        &SSBUSYNC_IS_ONLINE_NEXTENDO_REDIRECT_ACTIVE_CACHE,
+    )
+    .map(|value| value != 0)
 }
