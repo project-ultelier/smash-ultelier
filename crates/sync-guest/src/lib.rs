@@ -6,7 +6,7 @@ pub mod events;
 pub mod profile;
 pub mod runtime;
 
-pub const SSBUSYNC_API_VERSION: u32 = 1;
+pub const SSBUSYNC_API_VERSION: u32 = 2;
 
 pub const SSBUSYNC_INITIALIZED_SYMBOL: &[u8] = b"ssbusync_initialized\0";
 pub const SSBUSYNC_API_VERSION_SYMBOL: &[u8] = b"ssbusync_api_version\0";
